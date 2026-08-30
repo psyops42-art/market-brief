@@ -31,9 +31,11 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: 의존성 설치
+      - name: 파이썬 패키지 설치
+        run: pip install --quiet -r requirements.txt
+
+      - name: 렌더링 도구 설치
         run: |
-          pip install --quiet yfinance requests pillow
           sudo apt-get update -qq
           sudo apt-get install -y -qq wkhtmltopdf fonts-noto-cjk fonts-noto-cjk-extra
 
@@ -68,7 +70,11 @@ jobs:
         run: |
           SLUG=$(TZ=Asia/Seoul date +%Y-%m-%d)
           {
-            echo "## 데일리 마켓 브리핑 $SLUG"
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "## ✅ 데일리 마켓 브리핑 $SLUG — 배포 완료"
+            else
+              echo "## ❌ 데일리 마켓 브리핑 $SLUG — 실패 (아래 링크는 아직 생성되지 않았습니다)"
+            fi
             echo ""
             echo "| 항목 | 링크 |"
             echo "|---|---|"
