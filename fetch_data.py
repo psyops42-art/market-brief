@@ -44,11 +44,18 @@ TICKERS = {
 EXTRA = {"kosdaq": "^KQ11", "dow": "^DJI", "nasdaq_comp": "^IXIC", "brent": "BZ=F", "vix": "^VIX"}
 
 
-def yahoo(symbol: str) -> dict | None:
-    """최근 2영업일 종가로 값·등락 계산"""
+def yahoo(symbol: str, cutoff: str = None) -> dict | None:
+    """최근 2영업일 종가로 값·등락 계산.
+
+    cutoff(YYYY-MM-DD)를 주면 그 날짜 이후 데이터는 버린다.
+    환율·원자재는 주말·휴장일에도 호가가 잡혀 주식보다 최신 날짜가 나오는데,
+    그대로 두면 헤더의 '8/28 마감 기준' 표기와 행별 기준일이 어긋난다.
+    """
     try:
-        hist = yf.Ticker(symbol).history(period="7d", interval="1d")
+        hist = yf.Ticker(symbol).history(period="14d", interval="1d")
         hist = hist.dropna(subset=["Close"])
+        if cutoff:
+            hist = hist[hist.index.strftime("%Y-%m-%d") <= cutoff]
         if len(hist) < 2:
             return None
         last, prev = hist["Close"].iloc[-1], hist["Close"].iloc[-2]
@@ -186,8 +193,14 @@ def main():
     out = {"generated_at": dt.datetime.now(KST).isoformat(timespec="seconds"), "series": {}, "missing": []}
 
     print("[1/3] Yahoo Finance")
+
+    # 기준일 확정 : 주식시장(미국·한국)의 마지막 거래일 중 늦은 쪽
+    anchors = [yahoo("^GSPC"), yahoo("^KS11")]
+    cutoff = max([a["asof"] for a in anchors if a], default=None)
+    print(f"  · 기준일 : {cutoff or '확정 실패'} (이후 데이터는 제외)")
+
     for key, (sym, label, badge, _) in TICKERS.items():
-        rec = yahoo(sym)
+        rec = yahoo(sym, cutoff)
         if rec:
             rec.update(label=label, badge=badge, symbol=sym)
             out["series"][key] = rec
@@ -195,7 +208,7 @@ def main():
         else:
             out["missing"].append(key)
     for key, sym in EXTRA.items():
-        rec = yahoo(sym)
+        rec = yahoo(sym, cutoff)
         if rec:
             out["series"][key] = rec
 
@@ -218,6 +231,13 @@ def main():
             print(f"  · {rec['label']:<22} {rec['value']:>12}%  ({rec['chg']:+.1f}bp)  {rec['asof']}")
         else:
             out["missing"].append(key)
+
+    if cutoff:
+        stale = [r["label"] for r in out["series"].values()
+                 if r.get("label") and r["asof"] < cutoff]
+        if stale:
+            print(f"  · 기준일({cutoff})보다 이전 값: {', '.join(stale)} — 각 행에 기준일이 표기됩니다")
+        out["cutoff"] = cutoff
 
     with open(args.out, "w", encoding="utf-8") as fp:
         json.dump(out, fp, ensure_ascii=False, indent=2)
