@@ -1,0 +1,99 @@
+name: 데일리 마켓 브리핑
+
+on:
+  schedule:
+    # 22:00 UTC = 07:00 KST
+    # UTC 일~목 = KST 월~금 아침
+    #   일 22:00 UTC → 월 07:00 KST (직전 거래일 = 지난 금요일 마감)
+    #   목 22:00 UTC → 금 07:00 KST (직전 거래일 = 목요일 마감)
+    - cron: "0 22 * * 0-4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-brief
+  cancel-in-progress: false
+
+env:
+  PAGES_BASE: https://psyops42-art.github.io/market-brief
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 의존성 설치
+        run: |
+          pip install --quiet yfinance requests pillow
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wkhtmltopdf fonts-noto-cjk fonts-noto-cjk-extra
+
+      - name: 1단계 · 시장데이터 수집
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
+        run: python fetch_data.py --out data.json
+
+      - name: 2단계 · 헤드라인 생성
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python make_brief.py --data data.json --out brief.json
+
+      - name: 3단계 · 렌더링 (대시보드 + 화면캡처 썸네일)
+        run: python render.py --data data.json --brief brief.json --base "$PAGES_BASE" --out out
+
+      - name: 4단계 · 배포
+        run: |
+          mkdir -p docs
+          cp out/*.html out/*.png docs/
+          python build_index.py --base "$PAGES_BASE"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          git diff --staged --quiet && echo "변경 없음 — 커밋 생략" && exit 0
+          git commit -m "브리핑 $(TZ=Asia/Seoul date +%Y-%m-%d) 자동 배포"
+          git push
+
+      - name: 결과 요약
+        if: always()
+        run: |
+          SLUG=$(TZ=Asia/Seoul date +%Y-%m-%d)
+          {
+            echo "## 데일리 마켓 브리핑 $SLUG"
+            echo ""
+            echo "| 항목 | 링크 |"
+            echo "|---|---|"
+            echo "| 공유 링크 | $PAGES_BASE/$SLUG.html |"
+            echo "| 썸네일 | $PAGES_BASE/og-$SLUG.png |"
+            echo "| 아카이브 | $PAGES_BASE/ |"
+            echo ""
+            if [ -f data.json ]; then
+              echo "**미확보 지표**"
+              python -c "import json;m=json.load(open('data.json'))['missing'];print('- '+'\n- '.join(m) if m else '- 없음')"
+            fi
+            if [ -f brief.json ]; then
+              echo ""
+              echo "**자체 점검**"
+              python -c "import json;i=json.load(open('brief.json')).get('_issues',[]);print('- '+'\n- '.join(i) if i else '- 통과')"
+            fi
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: 실패 시 아티팩트 보관
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-${{ github.run_id }}
+          path: |
+            data.json
+            brief.json
+            out/
+          retention-days: 7
