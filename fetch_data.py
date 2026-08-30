@@ -83,30 +83,98 @@ def fred(series: str) -> dict | None:
         return None
 
 
-def ecos(item: str) -> dict | None:
-    """한국은행 ECOS 시장금리 일별 (817Y002). item: 010200000=국고3년 010210000=국고10년"""
+# ── 한국은행 ECOS ──────────────────────────────────────────────
+# 통계표 코드와 주기 표기가 자료마다 다릅니다(817Y002/060Y001, D/DD).
+# 하나를 추정해 고정하지 않고 후보를 순서대로 시도한 뒤,
+# 성공한 조합을 기억해 두 번째 호출부터는 바로 사용합니다.
+ECOS_CANDIDATES = [("817Y002", "D"), ("817Y002", "DD"),
+                   ("060Y001", "D"), ("060Y001", "DD")]
+ECOS_ITEMS = {"ktb3y": ("국고채(3년)", "010200000"),
+              "ktb10y": ("국고채(10년)", "010210000")}
+_ecos_combo = None          # 성공한 (stat, cycle)
+_ecos_items = {}            # 자동 탐색으로 찾은 항목코드
+
+
+def _ecos_get(url):
+    """(rows, 에러메시지) 반환"""
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        j = r.json()
+    except Exception as exc:                                    # noqa: BLE001
+        return None, f"요청 실패: {exc}"
+    if "RESULT" in j:                                           # ECOS 오류 응답
+        return None, f'{j["RESULT"].get("CODE")} {j["RESULT"].get("MESSAGE")}'
+    for root in ("StatisticSearch", "StatisticItemList"):
+        if root in j:
+            return j[root].get("row", []), None
+    return None, f"예상치 못한 응답: {str(j)[:120]}"
+
+
+def ecos_discover(key, stat):
+    """통계표의 항목 목록에서 국고채 3년/10년 코드를 이름으로 찾는다"""
+    rows, err = _ecos_get(f"https://ecos.bok.or.kr/api/StatisticItemList/{key}/json/kr/1/200/{stat}")
+    if err:
+        return {}, err
+    found = {}
+    for row in rows or []:
+        name = (row.get("ITEM_NAME") or "").replace(" ", "")
+        code = row.get("ITEM_CODE")
+        if "국고채" in name and "3년" in name and "13년" not in name:
+            found.setdefault("ktb3y", code)
+        if "국고채" in name and "10년" in name:
+            found.setdefault("ktb10y", code)
+    return found, None
+
+
+def ecos(key_name: str) -> dict | None:
+    """key_name: 'ktb3y' | 'ktb10y'"""
+    global _ecos_combo
     key = os.getenv("ECOS_API_KEY")
     if not key:
         print("  ! ECOS_API_KEY 없음 — 국고채 건너뜀")
         return None
+
     end = dt.datetime.now(KST).strftime("%Y%m%d")
-    start = (dt.datetime.now(KST) - dt.timedelta(days=20)).strftime("%Y%m%d")
-    url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/100/"
-           f"817Y002/D/{start}/{end}/{item}")
-    try:
-        r = requests.get(url, timeout=20)
-        r.raise_for_status()
-        rows = r.json().get("StatisticSearch", {}).get("row", [])
+    start = (dt.datetime.now(KST) - dt.timedelta(days=30)).strftime("%Y%m%d")
+    combos = [_ecos_combo] if _ecos_combo else ECOS_CANDIDATES
+
+    for stat, cycle in combos:
+        item = _ecos_items.get(key_name) or ECOS_ITEMS[key_name][1]
+        url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/200/"
+               f"{stat}/{cycle}/{start}/{end}/{item}")
+        rows, err = _ecos_get(url)
+
+        # 항목코드가 틀렸을 수 있으니 이름으로 한 번 더 탐색
+        if not rows and key_name not in _ecos_items:
+            found, derr = ecos_discover(key, stat)
+            if found:
+                _ecos_items.update(found)
+                print(f"    (항목코드 자동탐색: {found})")
+                if found.get(key_name) and found[key_name] != item:
+                    url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/200/"
+                           f"{stat}/{cycle}/{start}/{end}/{found[key_name]}")
+                    rows, err = _ecos_get(url)
+
+        if not rows:
+            if _ecos_combo is None:
+                print(f"    · {stat}/{cycle} 실패 — {err or '데이터 없음'}")
+            continue
+
         rows = [x for x in rows if x.get("DATA_VALUE")]
         if len(rows) < 2:
-            return None
+            continue
+        rows.sort(key=lambda x: x["TIME"])
         last, prev = float(rows[-1]["DATA_VALUE"]), float(rows[-2]["DATA_VALUE"])
         d = rows[-1]["TIME"]
+        if _ecos_combo is None:
+            _ecos_combo = (stat, cycle)
+            print(f"    · 조회 성공 조합: 통계표 {stat} / 주기 {cycle}")
         return {"value": round(last, 3), "chg": round((last - prev) * 100, 1),
                 "pct": None, "asof": f"{d[:4]}-{d[4:6]}-{d[6:]}", "unit": "bp"}
-    except Exception as exc:                                    # noqa: BLE001
-        print(f"  ! ECOS {item} 실패: {exc}")
-        return None
+
+    print(f"  ! ECOS {ECOS_ITEMS[key_name][0]} 조회 실패 — 모든 조합에서 데이터 없음")
+    return None
 
 
 def main():
@@ -142,8 +210,8 @@ def main():
             out["missing"].append(key)
 
     print("[3/3] 한국은행 ECOS · 국고채")
-    for key, item in (("ktb3y", "010200000"), ("ktb10y", "010210000")):
-        rec = ecos(item)
+    for key in ("ktb3y", "ktb10y"):
+        rec = ecos(key)
         if rec:
             rec.update(label={"ktb3y": "국고채 3년", "ktb10y": "국고채 10년"}[key], badge="kr")
             out["series"][key] = rec
