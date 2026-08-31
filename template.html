@@ -111,6 +111,8 @@ body{
 .row .nm .bd{display:inline-block;font-size:9.5px;font-weight:800;color:#fff;background:#B5BEC6;
   border-radius:4px;padding:1px 5px;margin-right:5px;vertical-align:2px;letter-spacing:0}
 .row .nm .bd.kr{background:#63C9A8}.row .nm .bd.us{background:#8FA8D8}
+.row .nm .bd.cn{background:#E0937C}.row .nm .bd.eu{background:#7E8BC4}
+.row .nm .bd.cr{background:#B49BE0}.row .nm .bd.fx{background:#7FB8C4}.row .nm .bd.cm{background:#C9A87C}
 .row .sub{font-size:10.5px;color:#98a1a8;margin-top:3px;line-height:1.4;letter-spacing:-.2px}
 .row .c2{width:78px;text-align:right;font-size:15px;font-weight:800;letter-spacing:-.4px}
 .row .c3{width:92px;text-align:right;font-size:11.5px;font-weight:800}
@@ -169,10 +171,10 @@ body{
 .srcbox{margin-top:14px;background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:13px 15px}
 .srcbox .qh{font-size:11.5px;font-weight:900;color:#3FB99A;margin-bottom:9px}
 .srcbox .lk{display:flex;flex-wrap:wrap;gap:6px}
-.srcbox a{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:-.4px;
+.srcbox a{flex:1 1 calc(50% - 3px);box-sizing:border-box;text-align:center;
+  font-size:11.5px;font-weight:800;letter-spacing:-.4px;
   color:#2b6b52;background:#EDF8F4;border:1px solid #A9DEC9;border-radius:8px;
-  padding:7px 10px;text-decoration:none}
-.srcbox a.iv{color:#3d4a7a;background:#EEF1FA;border-color:#BCC7E6}
+  padding:9px 6px;text-decoration:none}
 .srcbox a.ef{color:#6B57C4;background:#F6F3FD;border-color:#CDC1F1}
 .srcbox .memo{font-size:10.5px;color:#98a1a8;margin-top:8px;line-height:1.6}
 
@@ -257,20 +259,19 @@ body{
       </div>
 
       <div class="nextbox">
-        <div class="qh">이벤트와 일정 체크포인트</div>
+        <div class="qh">이번 주 남은 체크포인트</div>
         <p>{{NEXT}}</p>
       </div>
 
       <div class="srcbox">
         <div class="qh">시세 직접 조회</div>
         <div class="lk">
-          <a href="https://finance.naver.com/sise/" target="_blank" rel="noopener">네이버 국내증시</a>
-          <a href="https://finance.naver.com/world/" target="_blank" rel="noopener">네이버 해외증시</a>
-          <a href="https://finance.naver.com/marketindex/" target="_blank" rel="noopener">네이버 시장지표</a>
-          <a class="iv" href="https://kr.investing.com/rates-bonds/world-government-bonds" target="_blank" rel="noopener">국채금리</a>
+          <a href="https://m.stock.naver.com/domestic" target="_blank" rel="noopener">네이버 국내증시</a>
+          <a href="https://m.stock.naver.com/worldstock" target="_blank" rel="noopener">네이버 해외증시</a>
+          <a href="https://m.stock.naver.com/marketindex" target="_blank" rel="noopener">네이버 시장지표</a>
           <a class="ef" href="https://m.funetf.co.kr/" target="_blank" rel="noopener">ETF 조회</a>
         </div>
-        <div class="memo">환율·유가·금·국고채는 네이버페이증권 시장지표에서, 해외지수는 해외증시에서 실시간 확인이 가능합니다. ETF 수익률·순자산은 FunETF에서 조회하세요.</div>
+        <div class="memo">모바일 네이버페이증권으로 연결됩니다. 환율·유가·금·국고채는 시장지표에서, 상해종합·유로스톡스50은 해외증시에서 확인하세요. ETF 수익률·순자산은 FunETF에서 조회합니다.</div>
       </div>
 
       <div class="note">
