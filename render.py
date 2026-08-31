@@ -44,17 +44,22 @@ def num(v, nd=2):
     return "-" if v is None else f"{v:,.{nd}f}"
 
 
-def row(rec, sub):
+UNRESOLVED = []          # 화면에 '확인필요'로 렌더된 항목 (최종 판정 기준)
+
+
+def row(rec, sub, name=""):
     """지표 한 줄. rec 가 없으면 '확인필요'로 표기 (임의 추정 금지)"""
     if not rec:
+        UNRESOLVED.append(name or sub or "이름 미상")
         return ('        <div class="row">\n'
-                f'          <div class="c1"><div class="nm">{sub}</div>'
-                '<div class="sub">데이터 미확보</div></div>\n'
+                f'          <div class="c1"><div class="nm">{name or "데이터 미확보"}</div>'
+                '<div class="sub">자동 수집 실패 · 수동 확인 필요</div></div>\n'
                 '          <div class="c2 fl">확인필요</div><div class="c3 fl">－</div>\n'
                 '        </div>')
     badge = rec.get("badge") or ""
     bcls = f"bd {badge}" if badge else "bd"
-    blab = {"kr": "국내", "us": "미국"}.get(badge, "")
+    blab = {"kr": "국내", "us": "미국", "cn": "중국", "eu": "유럽",
+            "cr": "가상자산", "fx": "환율", "cm": "원자재"}.get(badge, "")
     btag = f'<span class="{bcls}">{blab}</span>' if blab else ""
     if rec.get("unit") == "bp":
         val, chg = f'{rec["value"]:.3f}%', f'{arrow(rec["chg"])} {abs(rec["chg"]):.1f}bp'
@@ -147,26 +152,34 @@ def main():
 
     kosdaq = S.get("kosdaq")
     dow = S.get("dow")
+    dax = S.get("dax")
     equity = "\n".join([
-        row(S.get("sp500"), sub("sp500", f'다우 {num(dow["value"])}({dow["pct"]:+.2f}%)' if dow else "")),
-        row(S.get("ndx"), sub("ndx", f'나스닥 종합 {num(S["nasdaq_comp"]["value"])}' if "nasdaq_comp" in S else "")),
-        row(S.get("kospi"), sub("kospi", f'코스닥 {num(kosdaq["value"])}({kosdaq["pct"]:+.2f}%)' if kosdaq else "")),
+        row(S.get("sp500"), sub("sp500", f'다우 {num(dow["value"])}({dow["pct"]:+.2f}%)' if dow else ""), "S&P 500"),
+        row(S.get("ndx"), sub("ndx", f'나스닥 종합 {num(S["nasdaq_comp"]["value"])}' if "nasdaq_comp" in S else ""), "나스닥 100"),
+        row(S.get("kospi"), sub("kospi", f'코스닥 {num(kosdaq["value"])}({kosdaq["pct"]:+.2f}%)' if kosdaq else ""), "코스피"),
+        row(S.get("shcomp"), sub("shcomp"), "상해종합"),
+        row(S.get("sx5e"), sub("sx5e", f'DAX {num(dax["value"])}({dax["pct"]:+.2f}%)' if dax else ""), "유로스톡스 50"),
     ])
-    rates = "\n".join([row(S.get(k), sub(k)) for k in ("ktb3y", "ktb10y", "ust3y", "ust10y")])
+    RATE_NAMES = {"ktb3y": "국고채 3년", "ktb10y": "국고채 10년",
+                  "ust3y": "미국채 3년", "ust10y": "미국채 10년"}
+    rates = "\n".join([row(S.get(k), sub(k), RATE_NAMES[k]) for k in RATE_NAMES])
     brent = S.get("brent")
     fx = "\n".join([
-        row(S.get("dxy"), sub("dxy")),
-        row(S.get("usdkrw"), sub("usdkrw")),
-        row(S.get("gold"), sub("gold")),
-        row(S.get("wti"), sub("wti", f'브렌트 ${num(brent["value"])}' if brent else "")),
+        row(S.get("dxy"), sub("dxy"), "달러인덱스"),
+        row(S.get("usdkrw"), sub("usdkrw"), "달러/원"),
+        row(S.get("gold"), sub("gold"), "국제금"),
+        row(S.get("wti"), sub("wti", f'브렌트 ${num(brent["value"])}' if brent else ""), "유가 WTI"),
+        row(S.get("btc"), sub("btc", "24시간 거래"), "비트코인"),
     ])
 
-    miss = data.get("missing") or []
     foot = ('        ※ 지수·환율·원자재는 Yahoo Finance, 미국채는 FRED, 국고채는 한국은행 ECOS '
             '자료를 자동 수집한 값입니다. 항목별 기준일은 각 행에 표기했습니다.<br>\n')
-    if miss:
-        foot += f'        ※ 자동 수집에 실패한 항목({len(miss)}건)은 "확인필요"로 표기했습니다. 발송 전 확인하세요.<br>\n'
-    foot += '        ※ 금·유가는 선물 기준이며 현물과 차이가 있을 수 있습니다.<br>\n'
+    foot += ('        ※ 금·유가는 선물 기준이며 현물과 차이가 있을 수 있습니다. '
+             '비트코인은 24시간 거래되어 주식시장 마감 시점과 기준이 다릅니다.<br>\n')
+
+    if UNRESOLVED:
+        foot += ('        ※ 자동 수집에 실패해 "확인필요"로 표기된 항목 '
+                 f'{len(UNRESOLVED)}건: {", ".join(UNRESOLVED)}. 발송 전 직접 확인하세요.<br>\n')
 
     tpl = open(args.template, encoding="utf-8").read()
     out_html = (tpl
@@ -206,8 +219,15 @@ def main():
     png = os.path.join(args.out, f"og-{slug}.png")
     make_og.build(path, png, date_line, kpis, brief["oneline_market"], tmpdir=args.out)
     print(f"  · OG 썸네일 → {png}")
-    if miss:
-        print(f"  ! 미확보 {len(miss)}건: {', '.join(miss)}")
+
+    report = {"slug": slug, "unresolved": UNRESOLVED,
+              "collected": sorted(S.keys()), "brief_issues": brief.get("_issues", [])}
+    with open(os.path.join(args.out, "report.json"), "w", encoding="utf-8") as fp:
+        json.dump(report, fp, ensure_ascii=False, indent=2)
+    if UNRESOLVED:
+        print(f"  ! 화면에 '확인필요'로 표기된 항목 {len(UNRESOLVED)}건: {', '.join(UNRESOLVED)}")
+    else:
+        print("  · 12개 지표 모두 정상 표기")
 
 
 if __name__ == "__main__":
