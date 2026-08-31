@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: daily-brief
@@ -57,41 +58,63 @@ jobs:
         run: |
           mkdir -p docs
           cp out/*.html out/*.png docs/
+          cp out/report.json docs/report.json
           python build_index.py --base "$PAGES_BASE"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs
           git diff --staged --quiet && echo "변경 없음 — 커밋 생략" && exit 0
-          git commit -m "브리핑 $(TZ=Asia/Seoul date +%Y-%m-%d) 자동 배포"
+          SLUG=$(TZ=Asia/Seoul date +%Y-%m-%d)
+          # 커밋 메시지에 링크를 넣으면 GitHub 푸시 알림 메일의
+          # "Log Message" 칸에 그대로 표시됩니다.
+          git commit \
+            -m "브리핑 $SLUG 자동 배포" \
+            -m "▼ 카톡에 붙여넣을 링크" \
+            -m "$PAGES_BASE/$SLUG.html" \
+            -m "아카이브 : $PAGES_BASE/"
           git push
+
+      - name: 5단계 · 알림 (이슈 + 메일)
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python notify.py --report out/report.json --base "$PAGES_BASE" --run "${{ github.run_number }}"
 
       - name: 결과 요약
         if: always()
         run: |
           SLUG=$(TZ=Asia/Seoul date +%Y-%m-%d)
-          {
-            if [ "${{ job.status }}" = "success" ]; then
-              echo "## ✅ 데일리 마켓 브리핑 $SLUG — 배포 완료"
-            else
-              echo "## ❌ 데일리 마켓 브리핑 $SLUG — 실패 (아래 링크는 아직 생성되지 않았습니다)"
-            fi
-            echo ""
-            echo "| 항목 | 링크 |"
-            echo "|---|---|"
-            echo "| 공유 링크 | $PAGES_BASE/$SLUG.html |"
-            echo "| 썸네일 | $PAGES_BASE/og-$SLUG.png |"
-            echo "| 아카이브 | $PAGES_BASE/ |"
-            echo ""
-            if [ -f data.json ]; then
-              echo "**미확보 지표**"
-              python -c "import json;m=json.load(open('data.json'))['missing'];print('- '+'\n- '.join(m) if m else '- 없음')"
-            fi
-            if [ -f brief.json ]; then
-              echo ""
-              echo "**자체 점검**"
-              python -c "import json;i=json.load(open('brief.json')).get('_issues',[]);print('- '+'\n- '.join(i) if i else '- 통과')"
-            fi
-          } >> $GITHUB_STEP_SUMMARY
+          V=${{ github.run_number }}
+          python - "$SLUG" "$V" "$PAGES_BASE" "${{ job.status }}" >> $GITHUB_STEP_SUMMARY <<'PY'
+          import json, os, sys
+          slug, ver, base, status = sys.argv[1:5]
+          rep = {}
+          for path in ("out/report.json", "docs/report.json"):
+              if os.path.exists(path):
+                  rep = json.load(open(path, encoding="utf-8")); break
+          unresolved = rep.get("unresolved", ["렌더 리포트 없음 — 실행이 중단되었습니다"])
+          issues = rep.get("brief_issues", [])
+          ok = status == "success"
+          icon = "✅" if ok and not unresolved else ("⚠️" if ok else "❌")
+          note = "" if ok else " — 실행 실패, 아래 링크는 아직 생성되지 않았습니다"
+          if ok and unresolved:
+              note = " — 배포됐지만 확인이 필요한 항목이 있습니다"
+          print(f"## {icon} 데일리 마켓 브리핑 {slug}{note}\n")
+          print("| 항목 | 링크 |")
+          print("|---|---|")
+          print(f"| 공유 링크 | {base}/{slug}.html?v={ver} |")
+          print(f"| 썸네일 | {base}/og-{slug}.png?v={ver} |")
+          print(f"| 아카이브 | {base}/ |\n")
+          print("> 카톡에는 `?v=` 없이 `.html` 까지만 붙여넣으세요. 위 링크는 캐시를 피해 확인용입니다.\n")
+          print("**화면에 '확인필요'로 표기된 항목**")
+          print("\n".join(f"- {x}" for x in unresolved) if unresolved else "- 없음 (12개 지표 정상)")
+          print("\n**헤드라인 자체 점검**")
+          print("\n".join(f"- {x}" for x in issues) if issues else "- 통과")
+          print(f"\n<sub>수집 성공 {len(rep.get('collected', []))}종</sub>")
+          PY
 
       - name: 실패 시 아티팩트 보관
         if: failure()
@@ -102,4 +125,5 @@ jobs:
             data.json
             brief.json
             out/
+            docs/report.json
           retention-days: 7
