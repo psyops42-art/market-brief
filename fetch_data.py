@@ -33,15 +33,19 @@ KST = dt.timezone(dt.timedelta(hours=9))
 
 # 표시 순서 고정 — 대시보드 표와 1:1 대응
 TICKERS = {
-    "sp500":   ("^GSPC",    "S&P 500",              "us", 2),
-    "ndx":     ("^NDX",     "나스닥 100",            "us", 2),
-    "kospi":   ("^KS11",    "코스피",                "kr", 2),
-    "dxy":     ("DX-Y.NYB", "달러인덱스 (pt)",       "",   2),
-    "usdkrw":  ("KRW=X",    "달러/원 (USD/KRW)",     "",   2),
-    "gold":    ("GC=F",     "국제금 ($/oz, 선물)",   "",   2),
-    "wti":     ("CL=F",     "유가 WTI ($/bbl, 선물)", "",  2),
+    "sp500":  ("^GSPC",     "S&P 500",               "us", 2),
+    "ndx":    ("^NDX",      "나스닥 100",             "us", 2),
+    "kospi":  ("^KS11",     "코스피",                 "kr", 2),
+    "shcomp": ("000001.SS", "상해종합",               "cn", 2),
+    "sx5e":   ("^STOXX50E", "유로스톡스 50",          "eu", 2),
+    "dxy":    ("DX-Y.NYB",  "달러인덱스 (pt)",        "fx", 2),
+    "usdkrw": ("KRW=X",     "달러/원 (USD/KRW)",      "fx", 2),
+    "gold":   ("GC=F",      "국제금 ($/oz, 선물)",    "cm", 2),
+    "wti":    ("CL=F",      "유가 WTI ($/bbl, 선물)", "cm", 2),
+    "btc":    ("BTC-USD",   "비트코인 (BTC/USD)",     "cr", 2),
 }
-EXTRA = {"kosdaq": "^KQ11", "dow": "^DJI", "nasdaq_comp": "^IXIC", "brent": "BZ=F", "vix": "^VIX"}
+EXTRA = {"kosdaq": "^KQ11", "dow": "^DJI", "nasdaq_comp": "^IXIC",
+         "brent": "BZ=F", "vix": "^VIX", "dax": "^GDAXI"}
 
 
 def yahoo(symbol: str, cutoff: str = None) -> dict | None:
