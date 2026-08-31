@@ -56,15 +56,27 @@ jobs:
 
       - name: 4단계 · 배포
         run: |
+          set -o pipefail
+          SLUG=$(TZ=Asia/Seoul date +%Y-%m-%d)
+
+          echo "▶ 산출물 복사"
+          ls -la out/
           mkdir -p docs
-          cp out/*.html out/*.png docs/
+          cp out/*.html docs/ || { echo "!! HTML 복사 실패"; exit 1; }
+          cp out/*.png  docs/ || { echo "!! PNG 복사 실패"; exit 1; }
           cp out/report.json docs/report.json
+
+          echo "▶ 아카이브 목록 생성"
           python build_index.py --base "$PAGES_BASE"
+
+          echo "▶ 커밋"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs
-          git diff --staged --quiet && echo "변경 없음 — 커밋 생략" && exit 0
-          SLUG=$(TZ=Asia/Seoul date +%Y-%m-%d)
+          if git diff --staged --quiet; then
+            echo "변경 없음 — 커밋 생략"
+            exit 0
+          fi
           # 커밋 메시지에 링크를 넣으면 GitHub 푸시 알림 메일의
           # "Log Message" 칸에 그대로 표시됩니다.
           git commit \
@@ -72,10 +84,19 @@ jobs:
             -m "▼ 카톡에 붙여넣을 링크" \
             -m "$PAGES_BASE/$SLUG.html" \
             -m "아카이브 : $PAGES_BASE/"
-          git push
+
+          echo "▶ 푸시"
+          # 작업 중 저장소를 직접 수정하면 푸시가 거부될 수 있어 한 번 재시도합니다.
+          if ! git push; then
+            echo "   1차 실패 — 원격 변경분을 받아 재시도합니다"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
+            git push
+          fi
+          echo "▶ 배포 완료 : $PAGES_BASE/$SLUG.html"
 
       - name: 5단계 · 알림 (이슈 + 메일)
         if: success()
+        continue-on-error: true          # 알림 실패가 배포 성공을 뒤엎지 않도록
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAIL_USER: ${{ secrets.MAIL_USER }}
