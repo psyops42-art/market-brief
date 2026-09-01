@@ -171,7 +171,7 @@ def main():
         row(S.get("sx5e"), sub("sx5e", f'DAX {num(dax["value"])}({dax["pct"]:+.2f}%)' if dax else ""), "유로스톡스 50"),
     ])
     RATE_NAMES = {"ktb3y": "국고채 3년", "ktb10y": "국고채 10년",
-                  "ust3y": "미국채 3년", "ust10y": "미국채 10년"}
+                  "ust10y": "미국채 10년", "ust30y": "미국채 30년"}
     rates = "\n".join([row(S.get(k), sub(k), RATE_NAMES[k]) for k in RATE_NAMES])
     brent = S.get("brent")
     fx = "\n".join([
@@ -184,6 +184,7 @@ def main():
 
     foot = ('        ※ 지수·환율·원자재는 Yahoo Finance, 미국채는 FRED, 국고채는 한국은행 ECOS '
             '자료를 자동 수집한 값입니다. 항목별 기준일은 각 행에 표기했습니다.<br>\n')
+    foot = foot.replace("미국채는 FRED", "미국채는 Yahoo Finance, 기준금리는 ECOS·FRED")
     foot += ('        ※ 금·유가는 선물 기준이며 현물과 차이가 있을 수 있습니다. '
              '비트코인은 24시간 거래되어 주식시장 마감 시점과 기준이 다릅니다.<br>\n')
 
@@ -196,6 +197,39 @@ def main():
         foot += ('        ※ 자동 수집에 실패해 "확인필요"로 표기된 항목 '
                  f'{len(UNRESOLVED)}건: {", ".join(UNRESOLVED)}. 발송 전 직접 확인하세요.<br>\n')
 
+    # ── 기준금리 카드 ──
+    pol = data.get("policy") or {}
+    if pol:
+        boxes = []
+        def pdate(iso):
+            """해가 다르면 연도까지 표기 (12/11 인하 → 25.12.11 인하)"""
+            d0 = dt.date.fromisoformat(iso)
+            return f'{d0.month}/{d0.day}' if d0.year == today.year else f'{str(d0.year)[2:]}.{d0.month}.{d0.day}'
+
+        for name in ("kr", "us"):
+            p_ = pol.get(name)
+            label = {"kr": "한국", "us": "미국"}[name]
+            if not p_:
+                boxes.append(f'<div class="pb"><div class="pl">{label}</div>'
+                             '<div class="pv">확인필요</div><div class="pc fl">－</div></div>')
+                continue
+            d = p_.get("delta_bp")
+            if d:
+                move = "인상" if d > 0 else "인하"
+                note = f'{pdate(p_["changed_on"])} {move} {abs(d)}bp'
+                k = "up" if d > 0 else "dn"
+            else:
+                note, k = f'{pdate(p_["changed_on"])} 이후 동결', "fl"
+            boxes.append(f'<div class="pb"><div class="pl">{label}</div>'
+                         f'<div class="pv">{p_["value"]:.2f}%</div>'
+                         f'<div class="pc {k}">{note}</div></div>')
+        policy_html = ('      <div class="policy">\n'
+                       '        <div class="ph">기준금리</div>\n'
+                       '        <div class="pg">' + "".join(boxes) + '</div>\n'
+                       '      </div>\n')
+    else:
+        policy_html = ""
+
     tpl = open(args.template, encoding="utf-8").read()
     out_html = (tpl
                 .replace("{{TITLE}}", html.escape(title))
@@ -206,6 +240,7 @@ def main():
                 .replace("{{NEWS}}", build_news(brief))
                 .replace("{{MINDSET}}", build_mindset(brief))
                 .replace("{{QUOTES}}", build_quotes(brief))
+                .replace("{{POLICY}}", policy_html)
                 .replace("{{TBL_EQUITY}}", equity)
                 .replace("{{TBL_RATES}}", rates)
                 .replace("{{TBL_FX}}", fx)
