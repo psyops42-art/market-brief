@@ -2,10 +2,7 @@
   "slug": "2026-09-01",
   "unresolved": [],
   "cutoff": "2026-09-01",
-  "stale": [
-    "미국채 3년(8/28)",
-    "미국채 10년(8/28)"
-  ],
+  "stale": [],
   "collected": [
     "brent",
     "btc",
@@ -24,7 +21,7 @@
     "sx5e",
     "usdkrw",
     "ust10y",
-    "ust3y",
+    "ust30y",
     "vix",
     "wti"
   ],
