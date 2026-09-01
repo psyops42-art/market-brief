@@ -4,7 +4,8 @@
 
 공식·무료 API만 사용합니다. 스크래핑 없음.
   · 글로벌(주식·환율·원자재) : yfinance (Yahoo Finance)
-  · 미국 국채 3년/10년        : FRED (미 세인트루이스 연준)  DGS3 / DGS10
+  · 미국 국채 10년/30년       : Yahoo Finance  ^TNX / ^TYX
+  · 기준금리(한국/미국)        : ECOS 722Y001 / FRED DFEDTARU
   · 국고채 3년/10년           : 한국은행 ECOS OpenAPI        817Y002
 
 환경변수
@@ -44,6 +45,12 @@ TICKERS = {
     "wti":    ("CL=F",      "유가 WTI ($/bbl, 선물)", "cm", 2),
     "btc":    ("BTC-USD",   "비트코인 (BTC/USD)",     "cr", 2),
 }
+# 수익률로 표시할 야후 티커 (등락을 bp 로 환산)
+RATE_TICKERS = {
+    "ust10y": ("^TNX", "미국채 10년"),
+    "ust30y": ("^TYX", "미국채 30년"),
+}
+
 EXTRA = {"kosdaq": "^KQ11", "dow": "^DJI", "nasdaq_comp": "^IXIC",
          "brent": "BZ=F", "vix": "^VIX", "dax": "^GDAXI"}
 
@@ -203,6 +210,61 @@ def ecos(key_name: str) -> dict | None:
     return None
 
 
+def fred_policy():
+    """연방기금금리 목표 상한 (DFEDTARU) — 현재 수준과 최근 변경 시점"""
+    key = os.getenv("FRED_API_KEY")
+    if not key:
+        print("  ! FRED_API_KEY 없음 — 미국 기준금리 건너뜀")
+        return None
+    try:
+        r = requests.get("https://api.stlouisfed.org/fred/series/observations",
+                         params={"series_id": "DFEDTARU", "api_key": key, "file_type": "json",
+                                 "sort_order": "desc", "limit": 900}, timeout=20)
+        r.raise_for_status()
+        obs = [o for o in r.json()["observations"] if o["value"] not in (".", "")]
+        if not obs:
+            return None
+        cur = float(obs[0]["value"])
+        for o in obs:                                   # 값이 바뀐 첫 시점을 거슬러 찾는다
+            if float(o["value"]) != cur:
+                idx = obs.index(o)
+                return {"value": cur, "asof": obs[0]["date"],
+                        "changed_on": obs[idx - 1]["date"],
+                        "delta_bp": round((cur - float(o["value"])) * 100)}
+        return {"value": cur, "asof": obs[0]["date"], "changed_on": obs[-1]["date"], "delta_bp": None}
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"  ! FRED DFEDTARU 실패: {exc}")
+        return None
+
+
+def ecos_policy():
+    """한국은행 기준금리 (722Y001 / 0101000) — 현재 수준과 최근 변경 시점"""
+    key = os.getenv("ECOS_API_KEY")
+    if not key:
+        print("  ! ECOS_API_KEY 없음 — 한국 기준금리 건너뜀")
+        return None
+    end = dt.datetime.now(KST).strftime("%Y%m%d")
+    start = (dt.datetime.now(KST) - dt.timedelta(days=1100)).strftime("%Y%m%d")
+    for cycle in ("D", "DD", "M"):
+        e, s_ = (end, start) if cycle in ("D", "DD") else (end[:6], start[:6])
+        rows, err = _ecos_get(f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/900/"
+                              f"722Y001/{cycle}/{s_}/{e}/0101000")
+        if not rows:
+            print(f"    · 기준금리 722Y001/{cycle} 실패 — {err or '데이터 없음'}")
+            continue
+        rows = sorted([x for x in rows if x.get("DATA_VALUE")], key=lambda x: x["TIME"])
+        cur = float(rows[-1]["DATA_VALUE"])
+        fmt = lambda t: f"{t[:4]}-{t[4:6]}-{t[6:]}" if len(t) == 8 else f"{t[:4]}-{t[4:6]}-01"
+        for i in range(len(rows) - 1, -1, -1):
+            if float(rows[i]["DATA_VALUE"]) != cur:
+                return {"value": cur, "asof": fmt(rows[-1]["TIME"]),
+                        "changed_on": fmt(rows[i + 1]["TIME"]),
+                        "delta_bp": round((cur - float(rows[i]["DATA_VALUE"])) * 100)}
+        return {"value": cur, "asof": fmt(rows[-1]["TIME"]),
+                "changed_on": fmt(rows[0]["TIME"]), "delta_bp": None}
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--print", dest="show", action="store_true")
@@ -211,7 +273,7 @@ def main():
 
     out = {"generated_at": dt.datetime.now(KST).isoformat(timespec="seconds"), "series": {}, "missing": []}
 
-    print("[1/3] Yahoo Finance")
+    print("[1/4] Yahoo Finance")
 
     # 기준일 확정 : 주요 주식시장의 마지막 거래일 중 가장 늦은 쪽
     anchors = [_yahoo_once(s_, None, "14d") for s_ in ("^GSPC", "^KS11", "^STOXX50E")]
@@ -231,17 +293,18 @@ def main():
         if rec:
             out["series"][key] = rec
 
-    print("[2/3] FRED · 미국 국채")
-    for key, series in (("ust3y", "DGS3"), ("ust10y", "DGS10")):
-        rec = fred(series)
+    print("[2/4] Yahoo Finance · 미국 국채 수익률")
+    for key, (sym, label) in RATE_TICKERS.items():
+        rec = yahoo(sym, cutoff)
         if rec:
-            rec.update(label={"ust3y": "미국채 3년", "ust10y": "미국채 10년"}[key], badge="us")
+            rec.update(label=label, badge="us", unit="bp",
+                       chg=round(rec["chg"] * 100, 1), pct=None, symbol=sym)
             out["series"][key] = rec
-            print(f"  · {rec['label']:<22} {rec['value']:>12}%  ({rec['chg']:+.1f}bp)  {rec['asof']}")
+            print(f"  · {label:<22} {rec['value']:>12}%  ({rec['chg']:+.1f}bp)  {rec['asof']}")
         else:
             out["missing"].append(key)
 
-    print("[3/3] 한국은행 ECOS · 국고채")
+    print("[3/4] 한국은행 ECOS · 국고채")
     for key in ("ktb3y", "ktb10y"):
         rec = ecos(key)
         if rec:
@@ -272,6 +335,20 @@ def main():
             print("    → 화면에는 '최신 아님'으로 표기되고 각주에 안내됩니다")
         else:
             print(f"  · 전 항목이 기준일({cutoff}) 값입니다")
+
+    print("[4/4] 기준금리")
+    out["policy"] = {}
+    for name, fn, label in (("kr", ecos_policy, "한국"), ("us", fred_policy, "미국")):
+        rec = fn()
+        if rec:
+            rec["label"] = label
+            out["policy"][name] = rec
+            d = rec.get("delta_bp")
+            move = "인상" if (d or 0) > 0 else ("인하" if (d or 0) < 0 else "변동")
+            tail = f" · {rec['changed_on']} {move} {abs(d)}bp" if d else ""
+            print(f"  · {label} 기준금리 {rec['value']:.2f}%{tail}")
+        else:
+            out["missing"].append(f"{name}_base_rate")
 
     with open(args.out, "w", encoding="utf-8") as fp:
         json.dump(out, fp, ensure_ascii=False, indent=2)
