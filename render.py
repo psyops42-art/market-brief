@@ -191,44 +191,11 @@ def main():
     if STALE:
         names = ", ".join(x["label"] for x in STALE.values())
         foot += (f'        ※ 기준일({fmt_date(cutoff)})보다 오래된 값 {len(STALE)}건: {names}. '
-                 '해당 시장의 시세 반영이 늦어 직전 거래일 값으로 표기했습니다.<br>\n')
+                 '해당 소스의 반영이 늦어 직전 확인값으로 표기했으며, 발송 전 확인이 필요합니다.<br>\n')
 
     if UNRESOLVED:
         foot += ('        ※ 자동 수집에 실패해 "확인필요"로 표기된 항목 '
                  f'{len(UNRESOLVED)}건: {", ".join(UNRESOLVED)}. 발송 전 직접 확인하세요.<br>\n')
-
-    # ── 기준금리 카드 ──
-    pol = data.get("policy") or {}
-    if pol:
-        boxes = []
-        def pdate(iso):
-            """해가 다르면 연도까지 표기 (12/11 인하 → 25.12.11 인하)"""
-            d0 = dt.date.fromisoformat(iso)
-            return f'{d0.month}/{d0.day}' if d0.year == today.year else f'{str(d0.year)[2:]}.{d0.month}.{d0.day}'
-
-        for name in ("kr", "us"):
-            p_ = pol.get(name)
-            label = {"kr": "한국", "us": "미국"}[name]
-            if not p_:
-                boxes.append(f'<div class="pb"><div class="pl">{label}</div>'
-                             '<div class="pv">확인필요</div><div class="pc fl">－</div></div>')
-                continue
-            d = p_.get("delta_bp")
-            if d:
-                move = "인상" if d > 0 else "인하"
-                note = f'{pdate(p_["changed_on"])} {move} {abs(d)}bp'
-                k = "up" if d > 0 else "dn"
-            else:
-                note, k = f'{pdate(p_["changed_on"])} 이후 동결', "fl"
-            boxes.append(f'<div class="pb"><div class="pl">{label}</div>'
-                         f'<div class="pv">{p_["value"]:.2f}%</div>'
-                         f'<div class="pc {k}">{note}</div></div>')
-        policy_html = ('      <div class="policy">\n'
-                       '        <div class="ph">기준금리</div>\n'
-                       '        <div class="pg">' + "".join(boxes) + '</div>\n'
-                       '      </div>\n')
-    else:
-        policy_html = ""
 
     tpl = open(args.template, encoding="utf-8").read()
     out_html = (tpl
@@ -240,7 +207,6 @@ def main():
                 .replace("{{NEWS}}", build_news(brief))
                 .replace("{{MINDSET}}", build_mindset(brief))
                 .replace("{{QUOTES}}", build_quotes(brief))
-                .replace("{{POLICY}}", policy_html)
                 .replace("{{TBL_EQUITY}}", equity)
                 .replace("{{TBL_RATES}}", rates)
                 .replace("{{TBL_FX}}", fx)
