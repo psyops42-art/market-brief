@@ -119,9 +119,9 @@ jobs:
           unresolved = rep.get("unresolved", ["렌더 리포트 없음 — 실행이 중단되었습니다"])
           issues = rep.get("brief_issues", [])
           ok = status == "success"
-          icon = "✅" if ok and not unresolved else ("⚠️" if ok else "❌")
+          icon = "✅" if ok and not unresolved and not rep.get("stale") else ("⚠️" if ok else "❌")
           note = "" if ok else " — 실행 실패, 아래 링크는 아직 생성되지 않았습니다"
-          if ok and unresolved:
+          if ok and (unresolved or rep.get("stale")):
               note = " — 배포됐지만 확인이 필요한 항목이 있습니다"
           print(f"## {icon} 데일리 마켓 브리핑 {slug}{note}\n")
           print("| 항목 | 링크 |")
@@ -130,8 +130,12 @@ jobs:
           print(f"| 썸네일 | {base}/og-{slug}.png?v={ver} |")
           print(f"| 아카이브 | {base}/ |\n")
           print("> 카톡에는 `?v=` 없이 `.html` 까지만 붙여넣으세요. 위 링크는 캐시를 피해 확인용입니다.\n")
+          stale = rep.get("stale", [])
+          print(f"**기준일** {rep.get('cutoff', '-')}\n")
           print("**화면에 '확인필요'로 표기된 항목**")
-          print("\n".join(f"- {x}" for x in unresolved) if unresolved else "- 없음 (12개 지표 정상)")
+          print("\n".join(f"- {x}" for x in unresolved) if unresolved else "- 없음")
+          print("\n**기준일보다 오래된 값 ('최신 아님' 표기)**")
+          print("\n".join(f"- {x}" for x in stale) if stale else "- 없음")
           print("\n**헤드라인 자체 점검**")
           print("\n".join(f"- {x}" for x in issues) if issues else "- 통과")
           print(f"\n<sub>수집 성공 {len(rep.get('collected', []))}종</sub>")
