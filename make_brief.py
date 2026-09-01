@@ -57,7 +57,7 @@ SCHEMA = """{
   "mindset": [
     {"title": "소제목", "body": "2~3문장"}
   ],
-  "quotes": ["담당자가 고객에게 그대로 읽어줄 수 있는 완결된 문장 3개"],
+  "quotes": ["담당자가 고객에게 그대로 읽어줄 수 있는 짧은 문장 3개. 각 45자 이내. 핵심 어구 1~2개를 <b>로 강조"],
   "oneline_market": "오늘 시장을 한 문장으로",
   "oneline_pension": "퇴직연금 관점 한 문장",
   "next_events": "다음 체크포인트를 · 로 구분해 한 줄"
@@ -108,8 +108,15 @@ def validate(b: dict) -> list:
             issues.append(f"헤드라인 {i}의 출처에 날짜(M/D)가 없음")
     if len(b.get("mindset", [])) != 3:
         issues.append("MINDSET이 3개가 아님")
-    if len(b.get("quotes", [])) != 3:
+    quotes = b.get("quotes", [])
+    if len(quotes) != 3:
         issues.append("정리문장이 3줄이 아님")
+    for i, q in enumerate(quotes, 1):
+        plain = re.sub(r"<[^>]+>", "", q)
+        if len(plain) > 55:
+            issues.append(f"정리문장 {i}이 {len(plain)}자로 김 (45자 권장)")
+        if "<b>" not in q:
+            issues.append(f"정리문장 {i}에 <b> 강조가 없음")
     for k in ("og_description", "oneline_market", "oneline_pension", "next_events", "checkpoint"):
         if not b.get(k):
             issues.append(f"{k} 누락")
@@ -132,8 +139,16 @@ def main():
     prompt = f"""오늘은 {today.year}년 {today.month}월 {today.day}일 ({WD[today.weekday()]})이다.
 아래는 오늘 아침 자동 수집된 시장 데이터다.
 
-[수집 데이터]
+[수집 데이터]  (기준일: {data.get("cutoff", "확인 필요")})
 {summarize(data)}
+
+[최신성 — 반드시 지킬 것]
+· 수집 데이터의 기준일(asof)이 곧 이 브리핑의 시점이다. 그보다 오래된 뉴스로 헤드라인을
+  채우지 않는다. 기준일 당일 또는 직전 영업일에 발생한 사건을 우선한다.
+· 이미 며칠 지난 이벤트(지난주 금통위, 지난주 잭슨홀 등)를 헤드라인으로 다시 올리지 않는다.
+  다만 그 사건의 '새로운 후속 전개'가 있으면 그 전개를 다룬다.
+· MINDSET도 오늘 수집된 수치의 움직임을 근거로 새로 쓴다. 어제와 같은 문장을 반복하지 않는다.
+· [미확인] 표시가 있는 항목의 수치는 서술에 사용하지 않는다.
 
 [할 일]
 0. 오늘이 월요일이면 직전 거래일은 지난 금요일이다. 주말 사이 나온 뉴스도 함께 확인하고,
@@ -146,7 +161,12 @@ def main():
    퇴직연금 자산배분에 주는 시사점을 쓴다. 칸을 비우지 않는다.
 3. MINDSET 3개를 쓴다. 2번은 반드시 Core(TDF)-Satellite(ETF) 역할 분담을 다룬다.
    1번은 그날의 시장 국면을 자산배분 언어로 해석하고, 3번은 장기투자 원칙을 다룬다.
-4. 정리문장 3줄과 오늘의 한 줄(시장/연금), 다음 체크포인트를 작성한다.
+4. 정리문장 3줄을 쓴다. 상담 현장에서 그대로 읽는 문장이므로 아래를 지킨다.
+   - 한 문장당 45자 이내. 두 문장으로 늘이지 않는다.
+   - 각 문장의 핵심 어구 1~2개를 <b>태그로 감싼다. 문장 전체를 감싸지 않는다.
+   - 설명이 아니라 결론을 쓴다. "~입니다"로 끝나는 단정적 조언 형태.
+   - 예시 형식: 오늘 오른 자산을 쫓기보다 <b>비중을 원래대로</b> 돌리는 것이 먼저입니다.
+5. 오늘의 한 줄(시장/연금)과 다음 체크포인트를 작성한다.
 
 아래 스키마의 JSON만 출력한다.
 {SCHEMA}"""
