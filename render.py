@@ -146,9 +146,19 @@ def main():
                  f'韓 {fmt_date(S["kospi"]["asof"]) if "kospi" in S else "-"} 마감 기준')
     title = f'글로벌 마켓 브리핑 | {today.year}년 {today.month}월 {today.day}일 ({WD[today.weekday()]}) 아침'
 
+    cutoff = data.get("cutoff")
+    STALE = {x["key"]: x for x in data.get("stale", [])}
+
     def sub(key, extra=""):
         r = S.get(key)
-        return (f'{fmt_date(r["asof"])} 종가' + (f' · {extra}' if extra else "")) if r else ""
+        if not r:
+            return ""
+        out = f'{fmt_date(r["asof"])} 종가'
+        if key in STALE:
+            out += f' · ⚠ 최신 아님(기준일 {fmt_date(cutoff)})'
+        if extra:
+            out += f' · {extra}'
+        return out
 
     kosdaq = S.get("kosdaq")
     dow = S.get("dow")
@@ -176,6 +186,11 @@ def main():
             '자료를 자동 수집한 값입니다. 항목별 기준일은 각 행에 표기했습니다.<br>\n')
     foot += ('        ※ 금·유가는 선물 기준이며 현물과 차이가 있을 수 있습니다. '
              '비트코인은 24시간 거래되어 주식시장 마감 시점과 기준이 다릅니다.<br>\n')
+
+    if STALE:
+        names = ", ".join(x["label"] for x in STALE.values())
+        foot += (f'        ※ 기준일({fmt_date(cutoff)})보다 오래된 값 {len(STALE)}건: {names}. '
+                 '해당 시장의 시세 반영이 늦어 직전 거래일 값으로 표기했습니다.<br>\n')
 
     if UNRESOLVED:
         foot += ('        ※ 자동 수집에 실패해 "확인필요"로 표기된 항목 '
@@ -221,13 +236,18 @@ def main():
     print(f"  · OG 썸네일 → {png}")
 
     report = {"slug": slug, "unresolved": UNRESOLVED,
+              "cutoff": cutoff,
+              "stale": [f'{x["label"]}({fmt_date(x["asof"])})' for x in STALE.values()],
               "collected": sorted(S.keys()), "brief_issues": brief.get("_issues", [])}
     with open(os.path.join(args.out, "report.json"), "w", encoding="utf-8") as fp:
         json.dump(report, fp, ensure_ascii=False, indent=2)
     if UNRESOLVED:
-        print(f"  ! 화면에 '확인필요'로 표기된 항목 {len(UNRESOLVED)}건: {', '.join(UNRESOLVED)}")
-    else:
-        print("  · 12개 지표 모두 정상 표기")
+        print(f"  ! '확인필요'로 표기된 항목 {len(UNRESOLVED)}건: {', '.join(UNRESOLVED)}")
+    if STALE:
+        print(f"  ! '최신 아님'으로 표기된 항목 {len(STALE)}건: "
+              f"{', '.join(x['label'] for x in STALE.values())}")
+    if not UNRESOLVED and not STALE:
+        print(f"  · 전 지표가 기준일({cutoff}) 값으로 정상 표기")
 
 
 if __name__ == "__main__":
