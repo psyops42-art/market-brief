@@ -48,7 +48,7 @@ EXTRA = {"kosdaq": "^KQ11", "dow": "^DJI", "nasdaq_comp": "^IXIC",
          "brent": "BZ=F", "vix": "^VIX", "dax": "^GDAXI"}
 
 
-def yahoo(symbol: str, cutoff: str = None) -> dict | None:
+def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
     """최근 2영업일 종가로 값·등락 계산.
 
     cutoff(YYYY-MM-DD)를 주면 그 날짜 이후 데이터는 버린다.
@@ -56,7 +56,7 @@ def yahoo(symbol: str, cutoff: str = None) -> dict | None:
     그대로 두면 헤더의 '8/28 마감 기준' 표기와 행별 기준일이 어긋난다.
     """
     try:
-        hist = yf.Ticker(symbol).history(period="14d", interval="1d")
+        hist = yf.Ticker(symbol).history(period=period, interval="1d")
         hist = hist.dropna(subset=["Close"])
         if cutoff:
             hist = hist[hist.index.strftime("%Y-%m-%d") <= cutoff]
@@ -70,6 +70,21 @@ def yahoo(symbol: str, cutoff: str = None) -> dict | None:
     except Exception as exc:                                    # noqa: BLE001
         print(f"  ! {symbol} 실패: {exc}")
         return None
+
+
+def yahoo(symbol: str, cutoff: str = None) -> dict | None:
+    """종가 조회. 기준일보다 오래된 값이면 기간을 늘려 한 번 더 시도한다.
+
+    해외 지수는 야후 반영이 늦어 최신 봉이 빠지는 경우가 있다.
+    그대로 두면 코스피·상해종합만 며칠 전 값으로 남는다.
+    """
+    rec = _yahoo_once(symbol, cutoff, "14d")
+    if rec and cutoff and rec["asof"] < cutoff:
+        retry = _yahoo_once(symbol, cutoff, "1mo")
+        if retry and retry["asof"] > rec["asof"]:
+            print(f"    (재조회로 {rec['asof']} → {retry['asof']} 갱신)")
+            return retry
+    return rec
 
 
 def fred(series: str) -> dict | None:
@@ -198,8 +213,8 @@ def main():
 
     print("[1/3] Yahoo Finance")
 
-    # 기준일 확정 : 주식시장(미국·한국)의 마지막 거래일 중 늦은 쪽
-    anchors = [yahoo("^GSPC"), yahoo("^KS11")]
+    # 기준일 확정 : 주요 주식시장의 마지막 거래일 중 가장 늦은 쪽
+    anchors = [_yahoo_once(s_, None, "14d") for s_ in ("^GSPC", "^KS11", "^STOXX50E")]
     cutoff = max([a["asof"] for a in anchors if a], default=None)
     print(f"  · 기준일 : {cutoff or '확정 실패'} (이후 데이터는 제외)")
 
@@ -236,12 +251,27 @@ def main():
         else:
             out["missing"].append(key)
 
+    # ── 최신성 검증 ──
+    print("[검증] 기준일 대비 최신성")
+    out["cutoff"] = cutoff
+    out["stale"] = []
     if cutoff:
-        stale = [r["label"] for r in out["series"].values()
-                 if r.get("label") and r["asof"] < cutoff]
-        if stale:
-            print(f"  · 기준일({cutoff})보다 이전 값: {', '.join(stale)} — 각 행에 기준일이 표기됩니다")
-        out["cutoff"] = cutoff
+        cut = dt.date.fromisoformat(cutoff)
+        today = dt.datetime.now(KST).date()
+        if (today - cut).days > 4:
+            print(f"  ! 기준일이 오늘({today})보다 {(today - cut).days}일 이전입니다 — 연휴이거나 수집 지연입니다")
+        for key, r in out["series"].items():
+            if not r.get("label") or r["asof"] >= cutoff:
+                continue
+            gap = (cut - dt.date.fromisoformat(r["asof"])).days
+            out["stale"].append({"key": key, "label": r["label"], "asof": r["asof"], "gap": gap})
+        if out["stale"]:
+            print(f"  ! 기준일({cutoff})보다 오래된 값 {len(out['stale'])}건")
+            for x in out["stale"]:
+                print(f"      - {x['label']:<22} {x['asof']}  ({x['gap']}일 이전)")
+            print("    → 화면에는 '최신 아님'으로 표기되고 각주에 안내됩니다")
+        else:
+            print(f"  · 전 항목이 기준일({cutoff}) 값입니다")
 
     with open(args.out, "w", encoding="utf-8") as fp:
         json.dump(out, fp, ensure_ascii=False, indent=2)
