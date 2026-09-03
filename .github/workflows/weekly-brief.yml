@@ -1,12 +1,11 @@
-name: 데일리 마켓 브리핑
+name: 주간 마켓 브리핑
 
 on:
   schedule:
-    # 22:00 UTC = 07:00 KST
-    # UTC 일~목 = KST 월~금 아침
-    #   일 22:00 UTC → 월 07:00 KST (직전 거래일 = 지난 금요일 마감)
-    #   목 22:00 UTC → 금 07:00 KST (직전 거래일 = 목요일 마감)
-    - cron: "0 22 * * 0-4"
+    # 21:00 UTC 일요일 = 06:00 KST 월요일
+    # 데일리(22:00 UTC = 07:00 KST)보다 1시간 먼저 돌아,
+    # 담당자가 데일리를 받기 전에 지난주 정리를 먼저 볼 수 있게 한다.
+    - cron: "0 21 * * 0"
   workflow_dispatch:
 
 permissions:
@@ -14,7 +13,7 @@ permissions:
   issues: write
 
 concurrency:
-  # 주간 작업도 같은 docs/index.html과 브랜치에 푸시하므로 배포 구간을 직렬화한다.
+  # 데일리 작업도 같은 docs/index.html과 브랜치에 푸시하므로 배포 구간을 직렬화한다.
   group: market-brief-publish
   cancel-in-progress: false
 
@@ -44,31 +43,34 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq wkhtmltopdf fonts-noto-cjk fonts-noto-cjk-extra
 
-      - name: 1단계 · 시장데이터 수집
+      - name: 1단계 · 주간 데이터 수집
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
-        run: python fetch_data.py --out data.json
+        run: python fetch_data_weekly.py --out data_weekly.json
 
-      - name: 2단계 · 헤드라인 생성
+      - name: 2단계 · 주간 리뷰·인사이트 생성
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python make_brief.py --data data.json --out brief.json
+        run: python make_brief_weekly.py --data data_weekly.json --out brief_weekly.json
 
       - name: 3단계 · 렌더링 (대시보드 + 화면캡처 썸네일)
-        run: python render.py --data data.json --brief brief.json --base "$PAGES_BASE" --out out
+        run: |
+          python render_weekly.py \
+            --data data_weekly.json --brief brief_weekly.json \
+            --base "$PAGES_BASE" --out out
 
       - name: 4단계 · 배포
         run: |
           set -o pipefail
-          SLUG=$(python -c 'import json; print(json.load(open("out/report.json", encoding="utf-8"))["slug"])')
-
-          echo "▶ 산출물 복사"
+          SLUG=$(python -c 'import json; print(json.load(open("out/report_weekly.json", encoding="utf-8"))["slug"])')
+          echo "▶ 산출물 확인 ($SLUG)"
           ls -la out/
+
           mkdir -p docs
           cp out/*.html docs/ || { echo "!! HTML 복사 실패"; exit 1; }
           cp out/*.png  docs/ || { echo "!! PNG 복사 실패"; exit 1; }
-          cp out/report.json docs/report.json
+          cp out/report_weekly.json docs/report_weekly.json
 
           echo "▶ 아카이브 목록 생성"
           python build_index.py --base "$PAGES_BASE"
@@ -81,16 +83,13 @@ jobs:
             echo "변경 없음 — 커밋 생략"
             exit 0
           fi
-          # 커밋 메시지에 링크를 넣으면 GitHub 푸시 알림 메일의
-          # "Log Message" 칸에 그대로 표시됩니다.
           git commit \
-            -m "브리핑 $SLUG 자동 배포" \
+            -m "주간 브리핑 $SLUG 자동 배포" \
             -m "▼ 카톡에 붙여넣을 링크" \
             -m "$PAGES_BASE/$SLUG.html" \
             -m "아카이브 : $PAGES_BASE/"
 
           echo "▶ 푸시"
-          # 작업 중 저장소를 직접 수정하면 푸시가 거부될 수 있어 한 번 재시도합니다.
           if ! git push; then
             echo "   1차 실패 — 원격 변경분을 받아 재시도합니다"
             git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
@@ -100,13 +99,16 @@ jobs:
 
       - name: 5단계 · 알림 (이슈 + 메일)
         if: success()
-        continue-on-error: true          # 알림 실패가 배포 성공을 뒤엎지 않도록
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAIL_USER: ${{ secrets.MAIL_USER }}
           MAIL_PASS: ${{ secrets.MAIL_PASS }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
-        run: python notify.py --report out/report.json --base "$PAGES_BASE" --run "${{ github.run_number }}"
+        run: |
+          python notify.py --report out/report_weekly.json \
+            --base "$PAGES_BASE" --run "${{ github.run_number }}" \
+            --label "주간 마켓 브리핑"
 
       - name: 결과 요약
         if: always()
@@ -114,40 +116,42 @@ jobs:
           V=${{ github.run_number }}
           python - "$V" "$PAGES_BASE" "${{ job.status }}" >> $GITHUB_STEP_SUMMARY <<'PY'
           import json, os, sys
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
           ver, base, status = sys.argv[1:4]
           rep = {}
-          for path in ("out/report.json", "docs/report.json"):
+          for path in ("out/report_weekly.json", "docs/report_weekly.json"):
               if os.path.exists(path):
                   rep = json.load(open(path, encoding="utf-8")); break
-          slug = rep.get("slug", datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat())
+          slug = rep.get("slug", "(생성 실패)")
           unresolved = rep.get("unresolved", ["렌더 리포트 없음 — 실행이 중단되었습니다"])
+          stale = rep.get("stale", [])
+          delayed = rep.get("delayed", [])
           issues = rep.get("brief_issues", [])
           ok = status == "success"
-          icon = "✅" if ok and not unresolved and not rep.get("stale") else ("⚠️" if ok else "❌")
+          needs = unresolved or stale or issues
+          icon = "✅" if ok and not needs else ("⚠️" if ok else "❌")
           note = "" if ok else " — 실행 실패, 아래 링크는 아직 생성되지 않았습니다"
-          if ok and (unresolved or rep.get("stale")):
+          if ok and needs:
               note = " — 배포됐지만 확인이 필요한 항목이 있습니다"
-          print(f"## {icon} 데일리 마켓 브리핑 {slug}{note}\n")
+          print(f"## {icon} 주간 마켓 브리핑 {slug}{note}\n")
+          lw, tw = rep.get("last_week", {}), rep.get("this_week", {})
+          if lw and tw:
+              print(f"**지난주** {lw.get('mon')} ~ {lw.get('fri')}  ·  "
+                    f"**이번주** {tw.get('mon')} ~ {tw.get('fri')}\n")
           print("| 항목 | 링크 |")
           print("|---|---|")
           print(f"| 공유 링크 | {base}/{slug}.html?v={ver} |")
           print(f"| 썸네일 | {base}/og-{slug}.png?v={ver} |")
           print(f"| 아카이브 | {base}/ |\n")
           print("> 카톡에는 `?v=` 없이 `.html` 까지만 붙여넣으세요. 위 링크는 캐시를 피해 확인용입니다.\n")
-          stale = rep.get("stale", [])
-          delayed = rep.get("delayed", [])
-          print(f"**기준일** {rep.get('cutoff', '-')}\n")
           print("**화면에 '확인필요'로 표기된 항목**")
           print("\n".join(f"- {x}" for x in unresolved) if unresolved else "- 없음")
           print("\n**기준일보다 오래된 값 (허용범위 초과 · 확인 필요)**")
           print("\n".join(f"- {x}" for x in stale) if stale else "- 없음")
-          if delayed:
-              print("\n**해외지수 정상 지연 (참고용, Yahoo 반영 지연 · 조치 불필요)**")
-              print("\n".join(f"- {x}" for x in delayed))
-          print("\n**헤드라인 자체 점검**")
+          print("\n**생성 내용 자체 점검 (헤드라인·일정 날짜범위)**")
           print("\n".join(f"- {x}" for x in issues) if issues else "- 통과")
+          if delayed:
+              print("\n**해외지수 정상 지연 (참고용 · 조치 불필요)**")
+              print("\n".join(f"- {x}" for x in delayed))
           print(f"\n<sub>수집 성공 {len(rep.get('collected', []))}종</sub>")
           PY
 
@@ -155,10 +159,10 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-${{ github.run_id }}
+          name: weekly-debug-${{ github.run_id }}
           path: |
-            data.json
-            brief.json
+            data_weekly.json
+            brief_weekly.json
             out/
-            docs/report.json
+            docs/report_weekly.json
           retention-days: 7
