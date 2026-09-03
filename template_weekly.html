@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#8FBBDD">
+<title>{{TITLE}}</title>
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="퇴직연금 위클리 마켓 브리핑">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{OG_DESC}}">
+<meta property="og:url" content="{{OG_URL}}">
+<meta property="og:image" content="{{OG_IMAGE}}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{{TITLE}}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{TITLE}}">
+<meta name="twitter:description" content="{{OG_DESC}}">
+<meta name="twitter:image" content="{{OG_IMAGE}}">
+<meta name="description" content="{{OG_DESC}}">
+<meta name="author" content="PHILIP">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#2b2f33;line-height:1.5}
+.app{max-width:520px;margin:0 auto;background:#F4F6F4;min-height:100vh;position:relative;overflow-x:hidden}
+
+/* ── 상단 밴드 (데일리와 동일 계열 그라데이션 + WEEKLY 배지만 추가) ── */
+.band{background:linear-gradient(100deg,#AFA2E6 0%,#95B6DE 42%,#5FD3B0 100%);
+  padding:calc(14px + env(safe-area-inset-top)) 20px 22px 20px}
+.band .top{display:flex;align-items:center;justify-content:space-between}
+.band .eyebrow{font-size:12px;color:rgba(255,255,255,.88);font-weight:500;letter-spacing:-.2px}
+.band .wk{font-size:10.5px;font-weight:900;color:#fff;background:rgba(255,255,255,.22);
+  border:1px solid rgba(255,255,255,.5);border-radius:6px;padding:3px 8px;letter-spacing:.3px}
+.band h1{font-size:26px;font-weight:900;color:#fff;letter-spacing:-1.2px;margin-top:3px}
+.band .date{font-size:12.5px;color:rgba(255,255,255,.94);margin-top:6px;letter-spacing:-.3px}
+
+/* ── 탭 메뉴 ── */
+.tabs{position:sticky;top:0;z-index:50;display:flex;background:rgba(244,246,244,.96);
+  backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid #DFE4E0;padding:7px 10px;gap:7px}
+.tabs button{flex:1;border:none;background:#EAEDEA;color:#78818a;font-family:inherit;
+  font-size:12.5px;font-weight:800;letter-spacing:-.4px;padding:10px 0;border-radius:10px;cursor:pointer}
+.tabs button .no{display:inline-block;width:16px;height:16px;line-height:16px;border-radius:5px;
+  background:#C9CFC9;color:#fff;font-size:10.5px;margin-right:4px;vertical-align:1px}
+.tabs button.on{background:linear-gradient(95deg,#A99BE0,#8FBBDD 55%,#63D3B2);color:#fff}
+.tabs button.on .no{background:rgba(255,255,255,.32)}
+
+.sheet{padding:16px 14px 0 14px}
+.pg{display:none;animation:fade .22s ease}
+.pg.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── 섹션 헤더 ── */
+.sec{background:linear-gradient(95deg,#A99BE0 0%,#8FBBDD 55%,#63D3B2 100%);
+  border-radius:11px;padding:10px 14px;display:flex;align-items:center;margin:0 0 13px 0}
+.sec .ck{width:19px;height:19px;border:2px solid #fff;border-radius:5px;color:#fff;
+  font-size:12px;font-weight:900;text-align:center;line-height:15px;margin-right:9px;flex:none}
+.sec h2{font-size:16.5px;font-weight:800;color:#fff;letter-spacing:-.7px}
+.sec2{display:flex;align-items:center;margin:0 0 8px 2px}
+.sec2 .ck{width:17px;height:17px;border:2px solid #63D3B2;border-radius:5px;color:#3FB99A;
+  font-size:11px;font-weight:900;text-align:center;line-height:13px;margin-right:7px;flex:none}
+.sec2 span{font-size:14.5px;font-weight:800;letter-spacing:-.6px}
+.asof{text-align:right;font-size:11px;color:#8a939a;margin:0 2px 5px 0}
+
+/* ── 뉴스/리뷰 카드 ── */
+.news{background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:14px 15px;margin-bottom:9px}
+.news .h{font-size:15px;font-weight:800;letter-spacing:-.7px;line-height:1.4;color:#1d2226}
+.news .h em{font-style:normal;color:#7C6BD0;font-weight:900;margin-right:4px}
+.news .d{font-size:12.5px;color:#5a636b;margin-top:7px;line-height:1.6;letter-spacing:-.3px}
+.news .s{font-size:11px;color:#a0a9b0;margin-top:6px}
+
+/* ── 지표 테이블 (주간형) ── */
+.tbl{background:#fff;border:1px solid #E3E7E3;border-radius:13px;overflow:hidden;margin-bottom:16px}
+.tbl .th{display:flex;background:#EBEEEB;padding:8px 12px;font-size:10.5px;font-weight:800;color:#5a636b}
+.tbl .th .c1{flex:1}
+.tbl .th .c2{width:64px;text-align:right}
+.tbl .th .c3{width:56px;text-align:right}
+.tbl .th .c4{width:64px;text-align:right}
+.row{display:flex;align-items:center;padding:11px 12px;border-top:1px solid #EDF0ED}
+.row .c1{flex:1;min-width:0;padding-right:4px}
+.row .nm{font-size:13px;font-weight:700;letter-spacing:-.4px;color:#22262a}
+.row .nm .bd{display:inline-block;font-size:9px;font-weight:800;color:#fff;background:#B5BEC6;
+  border-radius:4px;padding:1px 4px;margin-right:4px;vertical-align:1px}
+.row .nm .bd.kr{background:#63C9A8}.row .nm .bd.us{background:#8FA8D8}
+.row .nm .bd.cn{background:#E0937C}.row .nm .bd.eu{background:#7E8BC4}
+.row .nm .bd.cr{background:#B49BE0}.row .nm .bd.fx{background:#7FB8C4}.row .nm .bd.cm{background:#C9A87C}
+.row .trend{margin-top:4px;font-size:11px;letter-spacing:1.5px}
+.row .c2{width:64px;text-align:right;font-size:13px;font-weight:800;letter-spacing:-.3px}
+.row .c3{width:56px;text-align:right;font-size:11.5px;font-weight:800}
+.row .c4{width:64px;text-align:right;font-size:11.5px;font-weight:800}
+.up{color:#E03B32}.dn{color:#2668C4}.fl{color:#98a1a8}
+
+/* ── 마인드셋 카드 ── */
+.mind{background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:13px 15px;margin-bottom:9px}
+.mind .n{font-size:10.5px;font-weight:900;color:#3FB99A;letter-spacing:1.2px}
+.mind .t{font-size:14.5px;font-weight:800;letter-spacing:-.6px;margin-top:3px;color:#1d2226}
+.mind .b{font-size:12.5px;color:#5a636b;line-height:1.65;margin-top:6px;letter-spacing:-.3px}
+.mind b{color:#2b2f33}
+.cs{display:flex;align-items:center;margin-top:11px}
+.cs .box{flex:1;border-radius:10px;padding:9px 0;text-align:center;color:#fff}
+.cs .box .l{font-size:10.5px;font-weight:700;opacity:.93}
+.cs .box .v{font-size:14.5px;font-weight:900;letter-spacing:-.5px;margin-top:1px}
+.cs .core{background:#4FCFA5}.cs .sat{background:#8FA8D8}
+.cs .plus{margin:0 9px;font-size:18px;font-weight:900;color:#A9B2B9}
+
+/* ── 이주의 투자교육 (주간 전용 · 앰버 톤으로 의도적 구분) ── */
+.edu{background:#FFFBF3;border:1.5px solid #F0D9A8;border-radius:13px;padding:15px 16px;margin-bottom:9px}
+.edu .tag{display:inline-block;font-size:10px;font-weight:900;color:#fff;background:#D69A3E;
+  border-radius:6px;padding:3px 8px;letter-spacing:.3px}
+.edu .t{font-size:15px;font-weight:800;letter-spacing:-.6px;margin-top:9px;color:#5A4315}
+.edu .b{font-size:12.5px;color:#6b5a3a;line-height:1.7;margin-top:7px;letter-spacing:-.3px}
+.edu b{color:#8a5a12}
+
+/* ── 지난주 성적표 (베스트/워스트) ── */
+.mvp{display:flex;gap:8px;margin-bottom:16px}
+.mvp .c{flex:1;border-radius:13px;padding:13px 14px;color:#fff}
+.mvp .best{background:linear-gradient(135deg,#E85A50,#D6473E)}
+.mvp .worst{background:linear-gradient(135deg,#4A7FC9,#3968B0)}
+.mvp .lb{font-size:10.5px;font-weight:800;opacity:.85}
+.mvp .nm2{font-size:13.5px;font-weight:900;margin-top:6px;letter-spacing:-.4px}
+.mvp .vv{font-size:20px;font-weight:900;margin-top:2px;letter-spacing:-.7px}
+
+/* ── 이번주 일정(요일별) ── */
+.cal{background:#fff;border:1px solid #E3E7E3;border-radius:13px;overflow:hidden;margin-bottom:16px}
+.cal .d{display:flex;padding:11px 14px;border-top:1px solid #EDF0ED;align-items:baseline}
+.cal .d:first-child{border-top:none}
+.cal .wd{width:34px;flex:none;font-size:12px;font-weight:900;color:#78818a}
+.cal .wd.today{color:#6B57C4}
+.cal .ev{flex:1;font-size:12.5px;color:#33383d;letter-spacing:-.3px;line-height:1.5}
+.cal .ev b{color:#1d2226;font-weight:800}
+
+/* ── 인용 박스 ── */
+.quote{background:#F6F3FD;border:1.5px solid #CDC1F1;border-radius:13px;padding:14px 15px;margin-top:11px}
+.quote .qh{font-size:12px;font-weight:900;color:#6B57C4;margin-bottom:9px}
+.quote p{font-size:12.5px;line-height:1.65;color:#33383d;padding-left:15px;position:relative;margin-bottom:8px;letter-spacing:-.3px}
+.quote p:last-child{margin-bottom:0}
+.quote p:before{content:"\201C";position:absolute;left:0;top:0;color:#9C88DF;font-size:16px;font-weight:900;line-height:1.2}
+.quote b{color:#5B45B8}
+
+.note{margin-top:14px;font-size:10.5px;color:#8a939a;line-height:1.75;letter-spacing:-.2px}
+
+.foot{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 2px calc(20px + env(safe-area-inset-bottom)) 2px;margin-top:6px;border-top:1px solid #E3E7E3}
+.logo{font-size:14px;font-weight:900;color:#1F4E9C;letter-spacing:-.3px}
+.logo span{font-size:10.5px;color:#5a636b;font-weight:700;margin-left:4px}
+.hint{font-size:10.5px;color:#a8b0b6}
+
+.pager{display:flex;align-items:center;gap:8px;margin:16px 0 0 0}
+.pager button{flex:1;border:1px solid #D9DED9;background:#fff;color:#4a5158;font-family:inherit;
+  font-size:12.5px;font-weight:800;letter-spacing:-.4px;padding:12px 0;border-radius:11px;cursor:pointer}
+.pager button:disabled{opacity:.35}
+.pager .ind{font-size:12px;font-weight:800;color:#8a939a;min-width:44px;text-align:center}
+
+.srcbox{margin-top:14px;background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:13px 15px}
+.srcbox .qh{font-size:11.5px;font-weight:900;color:#3FB99A;margin-bottom:9px}
+.srcbox .lk{display:flex;flex-wrap:wrap;gap:6px}
+.srcbox a{flex:1 1 calc(50% - 3px);box-sizing:border-box;text-align:center;
+  font-size:11.5px;font-weight:800;letter-spacing:-.4px;
+  color:#2b6b52;background:#EDF8F4;border:1px solid #A9DEC9;border-radius:8px;
+  padding:9px 6px;text-decoration:none}
+.srcbox a.ef{color:#6B57C4;background:#F6F3FD;border-color:#CDC1F1}
+.srcbox .memo{font-size:10.5px;color:#98a1a8;margin-top:8px;line-height:1.6}
+
+@media (min-width:430px){
+  .band h1{font-size:29px}
+  .news .h{font-size:16px}.news .d{font-size:13px}
+  .mind .t{font-size:15.5px}.mind .b{font-size:13px}
+  .quote p{font-size:13px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="band">
+    <div class="top">
+      <div class="eyebrow">퇴직연금 · 위클리 마켓</div>
+      <div class="wk">WEEKLY</div>
+    </div>
+    <h1>주간 마켓 브리핑</h1>
+    <div class="date">{{DATE_LINE}}</div>
+  </div>
+
+  <nav class="tabs">
+    <button id="t1" class="on" onclick="go(1)"><span class="no">1</span>주간 리뷰</button>
+    <button id="t2" onclick="go(2)"><span class="no">2</span>이번주 인사이트</button>
+    <button id="t3" onclick="go(3)"><span class="no">3</span>주간 시장지표</button>
+  </nav>
+
+  <div class="sheet">
+
+    <!-- ══════════ PAGE 1 · 주간 리뷰 ══════════ -->
+    <section class="pg on" id="p1">
+
+      <div class="sec"><div class="ck">✓</div><h2>지난주 한눈에</h2></div>
+
+{{LAST_WEEK_NEWS}}
+
+      <div class="sec2" style="margin-top:6px"><div class="ck">✓</div><span>지난주 자산별 성적표</span></div>
+{{MVP_CARD}}
+
+      <div class="sec2"><div class="ck">✓</div><span>지난주 투자마인드 회고</span></div>
+{{RETRO_CARD}}
+
+      <div class="note">
+        ※ 본 자료는 시장 정보 제공을 목적으로 작성되었으며, 특정 상품의 매매를 권유하지 않습니다.<br>
+        ※ 실적배당형 상품의 수익률은 과거 실적으로 미래 수익을 보장하지 않으며, 운용실적에 따라 원금손실이 발생할 수 있습니다.
+      </div>
+    </section>
+
+    <!-- ══════════ PAGE 2 · 이번주 인사이트 ══════════ -->
+    <section class="pg" id="p2">
+
+      <div class="sec"><div class="ck">✓</div><h2>이번주 체크포인트</h2></div>
+
+{{CALENDAR}}
+
+      <div class="sec"><div class="ck">✓</div><h2>이번주 투자마인드</h2></div>
+
+{{MINDSET_01}}
+
+      <div class="mind">
+        <div class="n">MINDSET 02</div>
+        <div class="t">{{REBAL_TITLE}}</div>
+        <div class="b">{{REBAL_BODY}}</div>
+        <div class="cs">
+          <div class="box core"><div class="l">핵심자산 Core</div><div class="v">TDF 30~50%</div></div>
+          <div class="plus">+</div>
+          <div class="box sat"><div class="l">위성 Satellite</div><div class="v">ETF 30~70%</div></div>
+        </div>
+      </div>
+
+      <div class="edu">
+        <span class="tag">이주의 투자교육</span>
+        <div class="t">{{EDU_TITLE}}</div>
+        <div class="b">{{EDU_BODY}}</div>
+      </div>
+
+      <div class="quote">
+        <div class="qh">그대로 쓰는 정리 문장</div>
+{{QUOTES}}
+      <div class="note">
+        ※ 본 자료는 시장 정보 제공을 목적으로 작성되었으며, 특정 상품의 매매를 권유하지 않습니다.<br>
+        ※ 실적배당형 상품의 수익률은 과거 실적으로 미래 수익을 보장하지 않으며, 운용실적에 따라 원금손실이 발생할 수 있습니다.
+      </div>
+    </section>
+
+    <!-- ══════════ PAGE 3 · 주간 시장지표 ══════════ -->
+    <section class="pg" id="p3">
+
+      <div class="sec"><div class="ck">✓</div><h2>주간 시장지표</h2></div>
+
+      <div class="sec2"><div class="ck">✓</div><span>국내외 주식시장</span></div>
+      <div class="asof">{{ASOF_EQUITY}}</div>
+{{TBL_EQUITY}}
+
+      <div class="sec2"><div class="ck">✓</div><span>국내외 채권 금리</span></div>
+      <div class="asof">{{ASOF_RATES}}</div>
+{{TBL_RATES}}
+
+      <div class="sec2"><div class="ck">✓</div><span>원자재 / 환율</span></div>
+      <div class="asof">{{ASOF_FX}}</div>
+{{TBL_FX}}
+
+      <div class="srcbox">
+        <div class="qh">시세 직접 조회</div>
+        <div class="lk">
+          <a href="https://m.stock.naver.com/domestic" target="_blank" rel="noopener">네이버 국내증시</a>
+          <a href="https://m.stock.naver.com/worldstock" target="_blank" rel="noopener">네이버 해외증시</a>
+          <a href="https://m.stock.naver.com/marketindex" target="_blank" rel="noopener">네이버 시장지표</a>
+          <a class="ef" href="https://m.funetf.co.kr/" target="_blank" rel="noopener">ETF 조회</a>
+        </div>
+        <div class="memo">모바일 네이버페이증권으로 연결됩니다. 환율·유가·금·국고채는 시장지표에서, 상해종합·유로스톡스50은 해외증시에서 확인하세요. ETF 수익률·순자산은 FunETF에서 조회합니다.</div>
+      </div>
+
+      <div class="note">
+{{FOOTNOTE}}
+      </div>
+    </section>
+
+    <div class="pager">
+      <button id="prev" onclick="go(cur-1)">← 이전</button>
+      <div class="ind" id="ind">1 / 3</div>
+      <button id="next" onclick="go(cur+1)">다음 →</button>
+    </div>
+
+    <div class="foot">
+      <div class="logo">WEEKLY BRIEF <span>작성 PHILIP</span></div>
+      <div class="hint">좌우로 밀어 넘기기</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var cur = 1;
+var LAST = 3;
+var TITLES = {1:'주간 마켓 브리핑', 2:'주간 마켓 브리핑', 3:'주간 마켓 브리핑'};
+
+function go(n){
+  if(n < 1 || n > LAST) return;
+  cur = n;
+  for(var i=1;i<=LAST;i++){
+    document.getElementById('p'+i).classList.toggle('on', i===n);
+    document.getElementById('t'+i).classList.toggle('on', i===n);
+  }
+  document.getElementById('ind').textContent = n + ' / ' + LAST;
+  document.getElementById('prev').disabled = (n===1);
+  document.getElementById('next').disabled = (n===LAST);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+var x0=null, y0=null;
+document.addEventListener('touchstart', function(e){
+  x0 = e.changedTouches[0].clientX; y0 = e.changedTouches[0].clientY;
+}, {passive:true});
+document.addEventListener('touchend', function(e){
+  if(x0===null) return;
+  var dx = e.changedTouches[0].clientX - x0;
+  var dy = e.changedTouches[0].clientY - y0;
+  if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)*1.6){
+    go(dx < 0 ? cur+1 : cur-1);
+  }
+  x0 = null; y0 = null;
+}, {passive:true});
+
+document.addEventListener('keydown', function(e){
+  if(e.key==='ArrowRight') go(cur+1);
+  if(e.key==='ArrowLeft')  go(cur-1);
+});
+
+go(1);
+</script>
+</body>
+</html>

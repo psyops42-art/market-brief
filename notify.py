@@ -37,17 +37,20 @@ def load_report(path):
         return json.load(fp)
 
 
-def compose(rep, base, run):
+def compose(rep, base, run, label="마켓 브리핑"):
     slug = rep.get("slug", "")
     unresolved = rep.get("unresolved", [])
     issues = rep.get("brief_issues", [])
+    stale = rep.get("stale", [])
+    delayed = rep.get("delayed", [])
     link = f"{base}/{slug}.html"
 
-    status = "확인 필요" if (unresolved or issues) else "정상"
-    subject = f"[마켓 브리핑] {slug} 아침" + ("  ※확인필요" if unresolved or issues else "")
+    needs_check = bool(unresolved or issues or stale)
+    status = "확인 필요" if needs_check else "정상"
+    subject = f"[{label}] {slug} 아침" + ("  ※확인필요" if needs_check else "")
 
     lines = [
-        f"오늘의 브리핑이 준비됐습니다.  ({status})",
+        f"브리핑이 준비됐습니다.  ({status})",
         "",
         "▼ 카톡에 붙여넣을 링크",
         link,
@@ -57,9 +60,13 @@ def compose(rep, base, run):
     if unresolved:
         lines += ["", "■ 화면에 '확인필요'로 표기된 항목 — 발송 전 직접 확인하세요",
                   *[f"  · {x}" for x in unresolved]]
+    if stale:
+        lines += ["", "■ 기준일보다 오래된 값 (허용범위 초과)", *[f"  · {x}" for x in stale]]
     if issues:
-        lines += ["", "■ 헤드라인 자체 점검", *[f"  · {x}" for x in issues]]
-    if not unresolved and not issues:
+        lines += ["", "■ 생성 내용 자체 점검", *[f"  · {x}" for x in issues]]
+    if delayed:
+        lines += ["", "■ 해외지수 정상 지연 (참고용 · 조치 불필요)", *[f"  · {x}" for x in delayed]]
+    if not needs_check:
         lines += ["", f"지표 {len(rep.get('collected', []))}종 모두 정상 수집됐습니다."]
     lines += ["", f"— 자동 생성 (run #{run})"]
     return subject, "\n".join(lines), link
@@ -70,8 +77,15 @@ def make_issue(subject, body):
     if not os.getenv("GH_TOKEN") and not os.getenv("GITHUB_TOKEN"):
         print("  · GH_TOKEN 없음 — 이슈 생성 건너뜀")
         return
-    r = subprocess.run(["gh", "issue", "create", "--title", subject, "--body", body],
-                       capture_output=True, text=True)
+    try:
+        r = subprocess.run(["gh", "issue", "create", "--title", subject, "--body", body],
+                           capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        print("  ! gh CLI가 없어 이슈 생성을 건너뜁니다")
+        return
+    except subprocess.TimeoutExpired:
+        print("  ! 이슈 생성이 60초 안에 끝나지 않아 중단했습니다")
+        return
     if r.returncode:
         print(f"  ! 이슈 생성 실패: {(r.stderr or r.stdout).strip()[:200]}")
     else:
@@ -105,6 +119,7 @@ def main():
     ap.add_argument("--report", default="out/report.json")
     ap.add_argument("--base", required=True)
     ap.add_argument("--run", default="")
+    ap.add_argument("--label", default="마켓 브리핑", help="메일 제목 머리표 (예: 주간 마켓 브리핑)")
     ap.add_argument("--no-issue", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -113,7 +128,7 @@ def main():
     if not rep.get("slug"):
         sys.exit("report.json 을 읽지 못했습니다 — 렌더 단계가 실패했을 수 있습니다.")
 
-    subject, body, link = compose(rep, args.base.rstrip("/"), args.run)
+    subject, body, link = compose(rep, args.base.rstrip("/"), args.run, args.label)
     if args.dry_run:
         print(f"제목: {subject}\n{'-' * 50}\n{body}")
         return

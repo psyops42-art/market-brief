@@ -9,9 +9,9 @@
 ```
 매일 22:00 UTC (= 07:00 KST) · 월~금 아침
 │
-├─ 1단계  fetch_data.py    시장지표 12종 수집        → data.json
+├─ 1단계  fetch_data.py    핵심 시장지표 14종 수집   → data.json
 │         · Yahoo Finance : 주가·환율·원자재
-│         · FRED          : 미국채 3년/10년
+│         · Yahoo/FRED    : 미국채 10년/30년 (FRED 대체 경로)
 │         · 한국은행 ECOS : 국고채 3년/10년
 │
 ├─ 2단계  make_brief.py    헤드라인·코멘트 생성      → brief.json
@@ -74,6 +74,7 @@ cd market-brief
 아래 파일을 저장소 루트에 놓습니다.
 ```
 fetch_data.py  make_brief.py  render.py  make_og.py  build_index.py
+pipeline_utils.py
 template.html
 .github/workflows/daily-brief.yml
 ```
@@ -109,6 +110,12 @@ Actions 탭 → "데일리 마켓 브리핑" → **Run workflow** (수동 실행
 원인을 추적할 수 있습니다.
 
 **변경 없음 처리** — 휴장일 등으로 내용이 같으면 커밋을 건너뜁니다.
+
+**동시 실행 보호** — 데일리와 주간 워크플로는 같은 concurrency 그룹을 사용합니다.
+두 작업이 모두 `docs/index.html`과 같은 브랜치에 쓰더라도 동시에 푸시하지 않습니다.
+
+**HTML 주입 방지** — 웹검색/AI 생성 문구는 `pipeline_utils.py`에서 모두 이스케이프하고,
+강조용 `<b>` 태그만 허용한 뒤 템플릿에 넣습니다.
 
 ---
 

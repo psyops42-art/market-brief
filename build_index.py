@@ -11,18 +11,25 @@ GitHub Actions와 로컬 양쪽에서 같은 결과가 나오도록 publish.py �
 import argparse
 import os
 import re
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from pipeline_utils import atomic_write_text, safe_text, strip_markup
 
 DOCS = "docs"
 
 
 def read_meta(path):
-    html = open(path, encoding="utf-8").read()
-    title = re.search(r"<title>(.*?)</title>", html, re.S)
-    line = re.search(r'<span class="k">시장</span>(.*?)</p>', html, re.S)
-    clean = lambda t: re.sub(r"<[^>]+>", "", t).strip() if t else ""
-    return {"title": clean(title.group(1)) if title else os.path.basename(path),
-            "line": clean(line.group(1)) if line else ""}
+    with open(path, encoding="utf-8") as fp:
+        source = fp.read()
+    title = re.search(r"<title>(.*?)</title>", source, re.S | re.I)
+    line = re.search(r'<span class="k">시장</span>(.*?)</p>', source, re.S | re.I)
+    if not line:  # 주간 브리핑에는 '오늘의 한 줄'이 없으므로 OG 설명을 사용한다.
+        line = re.search(
+            r'<meta\s+property=["\']og:description["\']\s+content=["\'](.*?)["\']\s*/?>',
+            source, re.S | re.I)
+    return {"title": strip_markup(title.group(1)) if title else os.path.basename(path),
+            "line": strip_markup(line.group(1)) if line else ""}
 
 
 INDEX_TPL = """<!DOCTYPE html>
@@ -79,31 +86,44 @@ __CARDS__
 
 def build_index(cfg: dict):
     docs = os.path.join(cfg["local"], DOCS)
-    files = sorted([f for f in os.listdir(docs)
-                    if re.fullmatch(r"20\d{2}-\d{2}-\d{2}\.html", f)], reverse=True)
+    os.makedirs(docs, exist_ok=True)
+    base = cfg["base"].rstrip("/")
+    # 데일리(2026-08-31.html)와 주간(weekly-2026-08-31.html)을 함께 모아
+    # 날짜 최신순으로 한 목록에 보여준다.
+    entries = []
+    for f in os.listdir(docs):
+        m_daily = re.fullmatch(r"(20\d{2}-\d{2}-\d{2})\.html", f)
+        m_weekly = re.fullmatch(r"weekly-(20\d{2}-\d{2}-\d{2})\.html", f)
+        if m_daily:
+            entries.append({"file": f, "date": m_daily.group(1), "kind": "daily"})
+        elif m_weekly:
+            entries.append({"file": f, "date": m_weekly.group(1), "kind": "weekly"})
+    # 같은 날짜면 나중에 발행된 데일리를 위에 노출
+    # (월요일은 주간 06:00 → 데일리 07:00 순으로 발행됨)
+    entries.sort(key=lambda e: (e["date"], 1 if e["kind"] == "daily" else 0), reverse=True)
+
     cards = []
-    for i, f in enumerate(files):
-        slug = f[:-5]
-        meta = read_meta(os.path.join(docs, f))
+    for i, e in enumerate(entries):
+        meta = read_meta(os.path.join(docs, e["file"]))
         cls = "card new" if i == 0 else "card"
-        badge = "최신" if i == 0 else slug.replace("-", ".")
+        label = "주간" if e["kind"] == "weekly" else "데일리"
+        badge = f'{label} · 최신' if i == 0 else f'{label} · {e["date"].replace("-", ".")}'
         cards.append(
-            f'    <a class="{cls}" href="{f}">\n'
+            f'    <a class="{cls}" href="{e["file"]}">\n'
             f'      <div class="dt">{badge}</div>\n'
-            f'      <div class="tt">{meta["title"]}</div>\n'
-            f'      <div class="ln">{meta["line"][:110]}</div>\n'
+            f'      <div class="tt">{safe_text(meta["title"])}</div>\n'
+            f'      <div class="ln">{safe_text(meta["line"][:110])}</div>\n'
             f'      <div class="go">브리핑 열기 →</div>\n'
             f'    </a>')
     body = "\n".join(cards) if cards else '    <div class="empty">아직 등록된 브리핑이 없습니다.</div>'
-    latest_og = f'{cfg["base"]}/og-{files[0][:-5]}.png' if files else ""
-    html = (INDEX_TPL.replace("__CARDS__", body)
-                     .replace("__COUNT__", str(len(files)))
-                     .replace("__UPDATED__", date.today().strftime("%Y.%m.%d"))
-                     .replace("__BASE__", cfg["base"])
-                     .replace("__LATEST_OG__", latest_og))
-    with open(os.path.join(docs, "index.html"), "w", encoding="utf-8") as fp:
-        fp.write(html)
-    return len(files)
+    latest_og = f'{base}/og-{entries[0]["file"][:-5]}.png' if entries else ""
+    output = (INDEX_TPL.replace("__CARDS__", body)
+                     .replace("__COUNT__", str(len(entries)))
+                     .replace("__UPDATED__", datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y.%m.%d"))
+                     .replace("__BASE__", safe_text(base))
+                     .replace("__LATEST_OG__", safe_text(latest_og)))
+    atomic_write_text(os.path.join(docs, "index.html"), output)
+    return len(entries)
 
 
 

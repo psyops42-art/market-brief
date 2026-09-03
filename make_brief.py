@@ -18,8 +18,11 @@ import json
 import os
 import re
 import sys
+import time
 
 import requests
+from requests.exceptions import RequestException
+from pipeline_utils import atomic_write_json, has_disallowed_markup, md_date_in_range
 
 KST = dt.timezone(dt.timedelta(hours=9))
 WD = ["월", "화", "수", "목", "금", "토", "일"]
@@ -68,9 +71,12 @@ def summarize(data: dict) -> str:
     lines = []
     for key, r in data["series"].items():
         if r.get("unit") == "bp":
-            lines.append(f'  {r["label"]}: {r["value"]}% ({r["chg"]:+.1f}bp, {r["asof"]} 기준)')
+            chg = "-" if r.get("chg") is None else f'{r["chg"]:+.1f}bp'
+            lines.append(f'  {r.get("label", key)}: {r.get("value", "-")}% ({chg}, {r.get("asof", "-")} 기준)')
         else:
-            lines.append(f'  {r.get("label", key)}: {r["value"]:,} ({r["pct"]:+.2f}%, {r["asof"]} 기준)')
+            value = "-" if r.get("value") is None else f'{r["value"]:,}'
+            pct = "-" if r.get("pct") is None else f'{r["pct"]:+.2f}%'
+            lines.append(f'  {r.get("label", key)}: {value} ({pct}, {r.get("asof", "-")} 기준)')
     if data.get("missing"):
         lines.append(f'  [미확보] {", ".join(data["missing"])} — 이 항목의 수치는 언급하지 말 것')
     return "\n".join(lines)
@@ -82,12 +88,27 @@ def call_api(prompt: str, key: str) -> str:
         "messages": [{"role": "user", "content": prompt}],
         "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
     }
-    r = requests.post(API, headers={"x-api-key": key, "anthropic-version": "2023-06-01",
-                                    "content-type": "application/json"},
-                      json=body, timeout=180)
-    if r.status_code != 200:
-        sys.exit(f"API 오류 {r.status_code}: {r.text[:400]}")
-    return "".join(b.get("text", "") for b in r.json()["content"] if b.get("type") == "text")
+    headers = {"x-api-key": key, "anthropic-version": "2023-06-01",
+               "content-type": "application/json"}
+    last_error = "알 수 없는 오류"
+    for attempt in range(3):
+        try:
+            r = requests.post(API, headers=headers, json=body, timeout=180)
+            if r.status_code == 200:
+                payload = r.json()
+                text = "".join(b.get("text", "") for b in payload.get("content", [])
+                               if b.get("type") == "text")
+                if not text.strip():
+                    raise ValueError("API 응답에 텍스트 블록이 없습니다")
+                return text
+            last_error = f"HTTP {r.status_code}: {r.text[:400]}"
+            if r.status_code not in (408, 409, 429) and r.status_code < 500:
+                break
+        except (RequestException, ValueError) as exc:
+            last_error = str(exc)
+        if attempt < 2:
+            time.sleep(2 ** attempt)
+    sys.exit(f"API 호출 실패(3회 이내 재시도): {last_error}")
 
 
 def parse_json(text: str) -> dict:
@@ -98,14 +119,27 @@ def parse_json(text: str) -> dict:
     return json.loads(text[i:j + 1])
 
 
-def validate(b: dict) -> list:
+def validate(b: dict, cutoff: str | None = None, today: dt.date | None = None) -> list:
     """발송 전 자체 점검 — 문제를 리스트로 반환"""
     issues = []
     if len(b.get("headlines", [])) != 3:
         issues.append("헤드라인이 3건이 아님")
+    start = dt.date.fromisoformat(cutoff) if cutoff else None
+    if start:
+        # 프롬프트가 허용하는 '직전 영업일'까지 검증 범위에 포함한다.
+        previous_business_day = start - dt.timedelta(days=1)
+        while previous_business_day.weekday() >= 5:
+            previous_business_day -= dt.timedelta(days=1)
+        start = previous_business_day
+    end = today or dt.datetime.now(KST).date()
     for i, h in enumerate(b.get("headlines", []), 1):
-        if not re.search(r"\d{1,2}/\d{1,2}", h.get("source", "")):
+        source = h.get("source", "") if isinstance(h, dict) else ""
+        if not re.search(r"\d{1,2}/\d{1,2}", source):
             issues.append(f"헤드라인 {i}의 출처에 날짜(M/D)가 없음")
+        elif start and md_date_in_range(source, start, end) is None:
+            issues.append(f"헤드라인 {i}의 출처 날짜가 기준기간({start}~{end}) 밖")
+        if isinstance(h, dict) and has_disallowed_markup(h.get("body", "")):
+            issues.append(f"헤드라인 {i} 본문에 허용되지 않은 HTML 태그가 있음")
     if len(b.get("mindset", [])) != 3:
         issues.append("MINDSET이 3개가 아님")
     quotes = b.get("quotes", [])
@@ -113,10 +147,12 @@ def validate(b: dict) -> list:
         issues.append("정리문장이 3줄이 아님")
     for i, q in enumerate(quotes, 1):
         plain = re.sub(r"<[^>]+>", "", q)
-        if len(plain) > 55:
-            issues.append(f"정리문장 {i}이 {len(plain)}자로 김 (45자 권장)")
+        if len(plain) > 45:
+            issues.append(f"정리문장 {i}이 {len(plain)}자로 김 (45자 제한)")
         if "<b>" not in q:
             issues.append(f"정리문장 {i}에 <b> 강조가 없음")
+        if has_disallowed_markup(q):
+            issues.append(f"정리문장 {i}에 허용되지 않은 HTML 태그가 있음")
     for k in ("og_description", "oneline_market", "oneline_pension", "next_events", "checkpoint"):
         if not b.get(k):
             issues.append(f"{k} 누락")
@@ -133,7 +169,8 @@ def main():
     if not key:
         sys.exit("ANTHROPIC_API_KEY 환경변수가 필요합니다.")
 
-    data = json.load(open(args.data, encoding="utf-8"))
+    with open(args.data, encoding="utf-8") as fp:
+        data = json.load(fp)
     today = dt.datetime.now(KST).date()
 
     prompt = f"""오늘은 {today.year}년 {today.month}월 {today.day}일 ({WD[today.weekday()]})이다.
@@ -174,14 +211,14 @@ def main():
     print("[생성] Claude API 호출 (웹검색 포함)...")
     brief = parse_json(call_api(prompt, key))
 
-    issues = validate(brief)
+    issues = validate(brief, data.get("cutoff"), today)
     brief["_issues"] = issues
-    with open(args.out, "w", encoding="utf-8") as fp:
-        json.dump(brief, fp, ensure_ascii=False, indent=2)
+    atomic_write_json(args.out, brief)
 
     print(f"  · 헤드라인 {len(brief.get('headlines', []))}건 / MINDSET {len(brief.get('mindset', []))}개")
     for h in brief.get("headlines", []):
-        print(f"    - {h['title'][:40]}  ({h['source']})")
+        if isinstance(h, dict):
+            print(f"    - {str(h.get('title', ''))[:40]}  ({h.get('source', '-')})")
     if issues:
         print("  ! 점검 사항:")
         for i in issues:

@@ -12,6 +12,7 @@ render.py 가 호출합니다. 단독 실행도 가능합니다.
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -39,20 +40,26 @@ def shoot(html_path: str, page: int, out_png: str, width: int = 390):
     """대시보드를 캡처. page=2 면 2번 탭이 열린 상태로 렌더한다."""
     src = html_path
     if page == 2:
-        s = open(html_path, encoding="utf-8").read()
+        with open(html_path, encoding="utf-8") as fp:
+            s = fp.read()
         s = (s.replace('<section class="pg on" id="p1">', '<section class="pg" id="p1">')
               .replace('<section class="pg" id="p2">', '<section class="pg on" id="p2">')
               .replace("\ngo(1);", ""))
         fd, src = tempfile.mkstemp(suffix=".html")
         with os.fdopen(fd, "w", encoding="utf-8") as fp:
             fp.write(s)
-    r = subprocess.run(["wkhtmltoimage", "--width", str(width), "--quality", "92",
-                        "--javascript-delay", "600", src, out_png],
-                       capture_output=True)
-    if page == 2:
-        os.unlink(src)
-    if not os.path.exists(out_png):
-        sys.exit(f"캡처 실패: {r.stderr.decode()[:300]}")
+    try:
+        if os.path.exists(out_png):
+            os.remove(out_png)
+        r = subprocess.run(["wkhtmltoimage", "--enable-local-file-access",
+                            "--width", str(width), "--quality", "92",
+                            "--javascript-delay", "600", os.path.abspath(src), os.path.abspath(out_png)],
+                           capture_output=True, text=True, timeout=90)
+        if r.returncode or not os.path.exists(out_png) or os.path.getsize(out_png) == 0:
+            raise RuntimeError(f"캡처 실패({r.returncode}): {(r.stderr or r.stdout)[:300]}")
+    finally:
+        if page == 2 and os.path.exists(src):
+            os.unlink(src)
 
 
 def gradient() -> Image.Image:
@@ -96,7 +103,8 @@ def wrap(text: str, f, max_w: int, d: ImageDraw.ImageDraw, limit=3):
         if d.textlength(trial, font=f) <= max_w:
             cur = trial
         else:
-            lines.append(cur)
+            if cur:
+                lines.append(cur)
             cur = word
             if len(lines) == limit:
                 break
@@ -106,6 +114,7 @@ def wrap(text: str, f, max_w: int, d: ImageDraw.ImageDraw, limit=3):
 
 
 def build(html_path, out_png, date_line, kpis, oneline, tmpdir=None):
+    owned_tmp = tmpdir is None
     tmpdir = tmpdir or tempfile.mkdtemp()
     p1, p2 = os.path.join(tmpdir, "_p1.png"), os.path.join(tmpdir, "_p2.png")
     shoot(html_path, 1, p1)
@@ -154,9 +163,13 @@ def build(html_path, out_png, date_line, kpis, oneline, tmpdir=None):
     d.text((232, 558), "헤드라인 3 · 시장지표 12 · 작성 PHILIP", font=font(18), fill=(255, 255, 255))
 
     bg.save(out_png)
-    Image.open(out_png).convert("RGB").quantize(colors=220, method=2).save(out_png, optimize=True)
+    with Image.open(out_png) as rendered:
+        rendered.convert("RGB").quantize(colors=220, method=2).save(out_png, optimize=True)
     for f in (p1, p2):
-        os.path.exists(f) and os.remove(f)
+        if os.path.exists(f):
+            os.remove(f)
+    if owned_tmp:
+        shutil.rmtree(tmpdir, ignore_errors=True)
     return out_png
 
 

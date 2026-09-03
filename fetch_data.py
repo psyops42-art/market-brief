@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-1단계 · 시장지표 12종 수집  →  data.json
+1단계 · 시장지표 14종 수집  →  data.json
 
 공식·무료 API만 사용합니다. 스크래핑 없음.
   · 글로벌(주식·환율·원자재) : yfinance (Yahoo Finance)
@@ -24,6 +24,7 @@ import os
 import sys
 
 import requests
+from pipeline_utils import atomic_write_json
 
 try:
     import yfinance as yf
@@ -46,6 +47,8 @@ TICKERS = {
     "btc":    ("BTC-USD",   "비트코인 (BTC/USD)",     "cr", 2),
 }
 # 수익률로 표시할 야후 티커 (등락을 bp 로 환산)
+LAG_TOLERANCE = {"kospi": 1, "kosdaq": 1, "shcomp": 1, "sx5e": 1, "dax": 1}
+
 RATE_TICKERS = {
     "ust10y": ("^TNX", "미국채 10년", "DGS10"),
     "ust30y": ("^TYX", "미국채 30년", "DGS30"),
@@ -53,30 +56,6 @@ RATE_TICKERS = {
 
 EXTRA = {"kosdaq": "^KQ11", "dow": "^DJI", "nasdaq_comp": "^IXIC",
          "brent": "BZ=F", "vix": "^VIX", "dax": "^GDAXI"}
-
-
-def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
-    """최근 2영업일 종가로 값·등락 계산.
-
-    cutoff(YYYY-MM-DD)를 주면 그 날짜 이후 데이터는 버린다.
-    환율·원자재는 주말·휴장일에도 호가가 잡혀 주식보다 최신 날짜가 나오는데,
-    그대로 두면 헤더의 '8/28 마감 기준' 표기와 행별 기준일이 어긋난다.
-    """
-    try:
-        hist = yf.Ticker(symbol).history(period=period, interval="1d")
-        hist = hist.dropna(subset=["Close"])
-        if cutoff:
-            hist = hist[hist.index.strftime("%Y-%m-%d") <= cutoff]
-        if len(hist) < 2:
-            return None
-        last, prev = hist["Close"].iloc[-1], hist["Close"].iloc[-2]
-        return {"value": round(float(last), 2),
-                "chg": round(float(last - prev), 2),
-                "pct": round(float((last / prev - 1) * 100), 2),
-                "asof": hist.index[-1].strftime("%Y-%m-%d")}
-    except Exception as exc:                                    # noqa: BLE001
-        print(f"  ! {symbol} 실패: {exc}")
-        return None
 
 
 def _fi_get(fi, *names):
@@ -122,6 +101,30 @@ def _yahoo_quote_fallback(symbol: str, prior_value, cutoff: str):
             "pct": pct, "asof": cutoff}
 
 
+def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
+    """최근 2영업일 종가로 값·등락 계산.
+
+    cutoff(YYYY-MM-DD)를 주면 그 날짜 이후 데이터는 버린다.
+    환율·원자재는 주말·휴장일에도 호가가 잡혀 주식보다 최신 날짜가 나오는데,
+    그대로 두면 헤더의 '8/28 마감 기준' 표기와 행별 기준일이 어긋난다.
+    """
+    try:
+        hist = yf.Ticker(symbol).history(period=period, interval="1d")
+        hist = hist.dropna(subset=["Close"])
+        if cutoff:
+            hist = hist[hist.index.strftime("%Y-%m-%d") <= cutoff]
+        if len(hist) < 2:
+            return None
+        last, prev = hist["Close"].iloc[-1], hist["Close"].iloc[-2]
+        return {"value": round(float(last), 2),
+                "chg": round(float(last - prev), 2),
+                "pct": round(float((last / prev - 1) * 100), 2),
+                "asof": hist.index[-1].strftime("%Y-%m-%d")}
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"  ! {symbol} 실패: {exc}")
+        return None
+
+
 def yahoo(symbol: str, cutoff: str = None) -> dict | None:
     """종가 조회. 기준일보다 오래됐으면 두 단계로 최신화를 시도한다.
 
@@ -130,6 +133,7 @@ def yahoo(symbol: str, cutoff: str = None) -> dict | None:
 
     해외 지수는 야후 반영이 늦어 최신 봉이 빠지는 경우가 흔하다.
     그대로 두면 코스피·상해종합만 며칠 전 값으로 남는다.
+    그래도 남는 지연은 LAG_TOLERANCE로 '정상 지연'인지 검증 단계에서 가른다.
     """
     rec = _yahoo_once(symbol, cutoff, "14d")
 
@@ -160,7 +164,8 @@ def fred(series: str) -> dict | None:
                          params={"series_id": series, "api_key": key, "file_type": "json",
                                  "sort_order": "desc", "limit": 10}, timeout=20)
         r.raise_for_status()
-        obs = [o for o in r.json()["observations"] if o["value"] not in (".", "")]
+        payload = r.json()
+        obs = [o for o in payload.get("observations", []) if o.get("value") not in (".", "", None)]
         if len(obs) < 2:
             return None
         last, prev = float(obs[0]["value"]), float(obs[1]["value"])
@@ -285,7 +290,8 @@ def main():
         if rec:
             rec.update(label=label, badge=badge, symbol=sym)
             out["series"][key] = rec
-            print(f"  · {label:<22} {rec['value']:>12,} ({rec['pct']:+.2f}%)  {rec['asof']}")
+            pct = "-" if rec.get("pct") is None else f"{rec['pct']:+.2f}%"
+            print(f"  · {label:<22} {rec['value']:>12,} ({pct})  {rec['asof']}")
         else:
             out["missing"].append(key)
     for key, sym in EXTRA.items():
@@ -333,7 +339,6 @@ def main():
     out["cutoff"] = cutoff
     out["stale"] = []      # 실제 조치가 필요한 항목
     out["delayed"] = []    # Yahoo 반영 지연으로 알려진, 정상 범위의 지연
-    LAG_TOLERANCE = {"kospi": 1, "kosdaq": 1, "shcomp": 1, "sx5e": 1, "dax": 1}
 
     if cutoff:
         cut = dt.date.fromisoformat(cutoff)
@@ -361,8 +366,7 @@ def main():
         if not out["delayed"] and not out["stale"]:
             print(f"  · 전 항목이 기준일({cutoff}) 값입니다")
 
-    with open(args.out, "w", encoding="utf-8") as fp:
-        json.dump(out, fp, ensure_ascii=False, indent=2)
+    atomic_write_json(args.out, out)
 
     got, total = len(out["series"]), len(TICKERS) + 4
     print(f"\n수집 완료 : 핵심 {total - len(out['missing'])}/{total}종 → {args.out}")
