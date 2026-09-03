@@ -1,8 +1,9 @@
 {
-  "slug": "2026-09-03",
+  "slug": "2026-09-04",
   "unresolved": [],
-  "cutoff": "2026-09-02",
+  "cutoff": "2026-09-03",
   "stale": [],
+  "delayed": [],
   "collected": [
     "brent",
     "btc",
