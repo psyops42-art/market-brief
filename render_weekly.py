@@ -53,11 +53,16 @@ def num(v, nd=2):
 
 
 def pct_txt(v, nd=2):
-    return "-" if v is None else f"{v:+.{nd}f}%"
+    """데일리와 동일한 등락 표기: 화살표 + 절대값 (부호는 화살표가 대신한다)"""
+    if v is None:
+        return "-"
+    return f"{arrow(v)} {abs(v):.{nd}f}%"
 
 
 def bp_txt(v):
-    return "-" if v is None else f"{v:+.1f}bp"
+    if v is None:
+        return "-"
+    return f"{arrow(v)} {abs(v):.1f}bp"
 
 
 # ─────────────────────────────── 표 행 렌더링
@@ -68,7 +73,7 @@ BADGE_LABEL = {"kr": "국내", "us": "미국", "cn": "중국", "eu": "유럽",
 
 def row_html(key, r, stale_set, delayed_set, value_fmt=lambda v: num(v)):
     """데일리와 동일한 구조: 이름 → 회색 소제목(sub) 한 줄 → 값/등락.
-    주간은 sub 자리에 기준일과 4주 흐름을 함께 담는다."""
+    주간은 sub 자리에 기준일과 지연 안내를 담는다."""
     label = BADGE_LABEL.get(r["badge"], "")
     badge_html = f'<span class="bd {r["badge"]}">{label}</span>' if label else ""
 
@@ -84,8 +89,7 @@ def row_html(key, r, stale_set, delayed_set, value_fmt=lambda v: num(v)):
     ytd = bp_txt(r["ytd_pct"]) if r["unit"] == "bp" else pct_txt(r["ytd_pct"])
     return (
         '        <div class="row">\n'
-        f'          <div class="c1"><div class="nm">{badge_html}{html.escape(r["label"])}'
-        f'<span class="trend {r["trend_color"]}">{r["trend"]}</span></div>\n'
+        f'          <div class="c1"><div class="nm">{badge_html}{html.escape(r["label"])}</div>\n'
         f'            <div class="sub">{sub}</div></div>\n'
         f'          <div class="c2">{val}</div>'
         f'<div class="c3 {cls(r["wow_pct"])}">{wow}</div>'
@@ -228,8 +232,6 @@ def main():
     footnote_lines = [
         '        ※ 주간 등락은 그 전주 금요일 종가 대비 이번 주 금요일(또는 직전 거래일) 종가 기준이며, '
         '국채는 그 전주 대비 금리 변동폭(bp)입니다.<br>',
-        '        ※ 최근 4주 흐름은 매주 금요일 종가를 비교한 방향이며(왼쪽이 4주 전), '
-        '상승 우세면 적색, 하락 우세면 청색으로 표시합니다.<br>',
         '        ※ YTD(연초 대비)는 올해 첫 거래일 종가 대비 등락률입니다.<br>',
     ]
     if delayed_set:
