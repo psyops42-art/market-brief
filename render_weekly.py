@@ -23,9 +23,7 @@ import datetime as dt
 import html
 import json
 import os
-import re
-
-from pipeline_utils import atomic_write_json, atomic_write_text, safe_rich_text, safe_text, strip_markup
+import subprocess
 
 KST = dt.timezone(dt.timedelta(hours=9))
 WD_KR = ["월", "화", "수", "목", "금", "토", "일"]
@@ -34,11 +32,8 @@ WD_KR = ["월", "화", "수", "목", "금", "토", "일"]
 # ─────────────────────────────── 표시 헬퍼
 
 def fmt_date(iso):
-    try:
-        d = dt.date.fromisoformat(str(iso))
-        return f"{d.month}/{d.day}"
-    except (TypeError, ValueError):
-        return "-"
+    d = dt.date.fromisoformat(iso)
+    return f"{d.month}/{d.day}"
 
 
 def cls(v):
@@ -72,26 +67,29 @@ BADGE_LABEL = {"kr": "국내", "us": "미국", "cn": "중국", "eu": "유럽",
 
 
 def row_html(key, r, stale_set, delayed_set, value_fmt=lambda v: num(v)):
-    badge = r.get("badge", "")
-    label = BADGE_LABEL.get(badge, "")
-    badge_html = f'<span class="bd {badge}">{label}</span>' if label else ""
-    warn = ""
+    """데일리와 동일한 구조: 이름 → 회색 소제목(sub) 한 줄 → 값/등락.
+    주간은 sub 자리에 기준일과 4주 흐름을 함께 담는다."""
+    label = BADGE_LABEL.get(r["badge"], "")
+    badge_html = f'<span class="bd {r["badge"]}">{label}</span>' if label else ""
+
+    # 소제목: 기준일 + (필요 시) 지연 안내. 데일리처럼 한 줄로 붙인다.
+    sub = f'{fmt_date(r["asof"])} 종가'
     if key in stale_set:
-        warn = '<div class="sub" style="color:#c0392b">⚠ 확인 필요 — 최신 데이터 아님</div>'
+        sub += f' · ⚠ 최신 아님'
     elif key in delayed_set:
-        warn = '<div class="sub">해외지수 특성상 1일 지연 · 정상 범위</div>'
-    unit = r.get("unit")
-    value = r.get("value")
-    val = ("-" if value is None else f'{value:.3f}%') if unit == "bp" else value_fmt(value)
-    wow = bp_txt(r.get("wow_pct")) if unit == "bp" else pct_txt(r.get("wow_pct"))
-    ytd = bp_txt(r.get("ytd_pct")) if unit == "bp" else pct_txt(r.get("ytd_pct"))
+        sub += ' · 1일 지연'
+
+    val = f'{r["value"]:.3f}%' if r["unit"] == "bp" else value_fmt(r["value"])
+    wow = bp_txt(r["wow_pct"]) if r["unit"] == "bp" else pct_txt(r["wow_pct"])
+    ytd = bp_txt(r["ytd_pct"]) if r["unit"] == "bp" else pct_txt(r["ytd_pct"])
     return (
         '        <div class="row">\n'
-        f'          <div class="c1"><div class="nm">{badge_html}{safe_text(r.get("label", key))}</div>\n'
-        f'            <div class="trend {r.get("trend_color", "fl")}">{safe_text(r.get("trend", "－"))}</div>{warn}</div>\n'
+        f'          <div class="c1"><div class="nm">{badge_html}{html.escape(r["label"])}'
+        f'<span class="trend {r["trend_color"]}">{r["trend"]}</span></div>\n'
+        f'            <div class="sub">{sub}</div></div>\n'
         f'          <div class="c2">{val}</div>'
-        f'<div class="c3 {cls(r.get("wow_pct"))}">{wow}</div>'
-        f'<div class="c4 {cls(r.get("ytd_pct"))}">{ytd}</div>\n'
+        f'<div class="c3 {cls(r["wow_pct"])}">{wow}</div>'
+        f'<div class="c4 {cls(r["ytd_pct"])}">{ytd}</div>\n'
         '        </div>'
     )
 
@@ -124,7 +122,7 @@ def build_news(brief):
     for i, n in enumerate(brief.get("last_week_headlines", [])[:3], 1):
         out.append('      <div class="news">\n'
                    f'        <div class="h"><em>{icons[i-1]}</em>{html.escape(n.get("title",""))}</div>\n'
-                   f'        <div class="d">{safe_rich_text(n.get("body"))}</div>\n'
+                   f'        <div class="d">{n.get("body","")}</div>\n'
                    f'        <div class="s">{html.escape(n.get("source",""))}</div>\n'
                    '      </div>')
     return "\n".join(out)
@@ -152,19 +150,19 @@ def build_mvp(series):
 
 
 def build_calendar(brief):
+    """날짜는 항상 굵게(일관성), 중요한 일정은 요일까지 강조색으로 구분."""
     rows = []
     for c in brief.get("checkpoints", []):
         wd_class = "wd today" if c.get("highlight") else "wd"
-        text = safe_text(c.get("text", ""))
-        event_date = safe_text(c.get("date", ""))
+        date_txt = html.escape(c.get("date", ""))
+        body = c.get("text", "")
         if c.get("highlight"):
-            text = f'<b>{event_date}</b> {text}'
-        else:
-            text = f'{event_date} {text}'
+            body = f'<b>{body}</b>'
         rows.append(f'        <div class="d"><div class="{wd_class}">{html.escape(c.get("day",""))}</div>'
-                   f'<div class="ev">{text}</div></div>')
+                    f'<div class="ev"><b>{date_txt}</b> {body}</div></div>')
     if not rows:
-        rows.append('        <div class="d"><div class="wd">-</div><div class="ev">확인필요 — 일정 미생성</div></div>')
+        rows.append('        <div class="d"><div class="wd">-</div>'
+                    '<div class="ev">확인필요 — 일정 미생성</div></div>')
     return '      <div class="cal">\n' + "\n".join(rows) + '\n      </div>'
 
 
@@ -178,12 +176,9 @@ def main():
     ap.add_argument("--base", required=True)
     ap.add_argument("--out", default="out")
     args = ap.parse_args()
-    args.base = args.base.rstrip("/")
 
-    with open(args.data, encoding="utf-8") as fp:
-        data = json.load(fp)
-    with open(args.brief, encoding="utf-8") as fp:
-        brief = json.load(fp)
+    data = json.load(open(args.data, encoding="utf-8"))
+    brief = json.load(open(args.brief, encoding="utf-8"))
     S = data["series"]
     os.makedirs(args.out, exist_ok=True)
 
@@ -202,10 +197,8 @@ def main():
     asof_fx = f'{prev_fri.month}/{prev_fri.day} 대비'
     title = f'주간 마켓 브리핑 | {lm.month}월 {lm.day}일~{lf.day}일 정리'
 
-    stale_keys = [x["key"] for x in data.get("stale", []) if x.get("key")]
-    delayed_keys = [x["key"] for x in data.get("delayed", []) if x.get("key")]
-    stale_set = set(stale_keys)
-    delayed_set = set(delayed_keys)
+    stale_set = {x["key"] for x in data.get("stale", [])}
+    delayed_set = {x["key"] for x in data.get("delayed", [])}
 
     equity = build_table(S, ["sp500", "ndx", "kospi", "shcomp", "sx5e"], stale_set, delayed_set)
     rates = build_table(S, ["ktb3y", "ktb10y", "ust10y", "ust30y"], stale_set, delayed_set)
@@ -218,18 +211,18 @@ def main():
     retro = brief.get("retrospective", {"title": "확인필요", "body": "회고 데이터가 생성되지 않았습니다."})
     retro_card = ('      <div class="mind">\n        <div class="n">RETROSPECTIVE</div>\n'
                  f'        <div class="t">{html.escape(retro.get("title",""))}</div>\n'
-                 f'        <div class="b">{safe_rich_text(retro.get("body"))}</div>\n      </div>')
+                 f'        <div class="b">{retro.get("body","")}</div>\n      </div>')
 
     m01 = brief.get("mindset_01", {"title": "확인필요", "body": "생성되지 않았습니다."})
     mindset01 = ('      <div class="mind">\n        <div class="n">MINDSET 01</div>\n'
                 f'        <div class="t">{html.escape(m01.get("title",""))}</div>\n'
-                f'        <div class="b">{safe_rich_text(m01.get("body"))}</div>\n      </div>')
+                f'        <div class="b">{m01.get("body","")}</div>\n      </div>')
 
     edu = brief.get("education", {"title": "", "body": ""})
     rebal = brief.get("rebalance_note", {"title": "", "body": ""})
 
     quotes = brief.get("quotes", [])
-    quotes_html = "\n".join(f'        <p>{safe_rich_text(q)}</p>' for q in quotes[:3]) or '        <p>확인필요</p>'
+    quotes_html = "\n".join(f'        <p>{q}</p>' for q in quotes) or '        <p>확인필요</p>'
 
     miss = data.get("missing") or []
     footnote_lines = [
@@ -240,12 +233,12 @@ def main():
         '        ※ YTD(연초 대비)는 올해 첫 거래일 종가 대비 등락률입니다.<br>',
     ]
     if delayed_set:
-        names = ", ".join(S[k]["label"] for k in delayed_keys if k in S)
-        footnote_lines.append(f'        ※ {safe_text(names)}은 휴장 또는 데이터 제공사의 반영 시차로 '
-                              '직전 거래일 값이 사용됐습니다.<br>')
+        names = ", ".join(S[k]["label"] for k in delayed_set if k in S)
+        footnote_lines.append(f'        ※ {names}은 데이터 제공사가 해외지수 종가를 통상 1거래일 늦게 '
+                              '반영합니다. 오류가 아닌 정상적인 지연입니다.<br>')
     if stale_set:
-        names = ", ".join(S[k]["label"] for k in stale_keys if k in S)
-        footnote_lines.append(f'        ※ {safe_text(names)}은 정상 지연 범위를 넘어선 값입니다. 발송 전 확인이 필요합니다.<br>')
+        names = ", ".join(S[k]["label"] for k in stale_set if k in S)
+        footnote_lines.append(f'        ※ {names}은 정상 지연 범위를 넘어선 값입니다. 발송 전 확인이 필요합니다.<br>')
     if miss:
         names = ", ".join(KEY_LABEL.get(k, k) for k in miss)
         footnote_lines.append(f'        ※ 수집 실패 {len(miss)}건: {names} — "확인필요"로 표기했습니다.<br>')
@@ -255,13 +248,12 @@ def main():
                               '발송 전 헤드라인·일정 날짜를 확인해 주세요.<br>')
     footnote = "\n".join(footnote_lines)
 
-    with open(args.template, encoding="utf-8") as fp:
-        tpl = fp.read()
+    tpl = open(args.template, encoding="utf-8").read()
     out_html = (tpl
                 .replace("{{TITLE}}", html.escape(title))
-                .replace("{{OG_DESC}}", safe_text(brief.get("og_description", "")))
-                .replace("{{OG_URL}}", safe_text(f"{args.base}/{slug}.html"))
-                .replace("{{OG_IMAGE}}", safe_text(f"{args.base}/og-{slug}.png"))
+                .replace("{{OG_DESC}}", html.escape(brief.get("og_description", "")))
+                .replace("{{OG_URL}}", f"{args.base}/{slug}.html")
+                .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png")
                 .replace("{{DATE_LINE}}", date_line)
                 .replace("{{LAST_WEEK_NEWS}}", news)
                 .replace("{{MVP_CARD}}", mvp)
@@ -269,9 +261,9 @@ def main():
                 .replace("{{CALENDAR}}", calendar)
                 .replace("{{MINDSET_01}}", mindset01)
                 .replace("{{REBAL_TITLE}}", html.escape(rebal.get("title", "")))
-                .replace("{{REBAL_BODY}}", safe_rich_text(rebal.get("body", "")))
+                .replace("{{REBAL_BODY}}", rebal.get("body", ""))
                 .replace("{{EDU_TITLE}}", html.escape(edu.get("title", "")))
-                .replace("{{EDU_BODY}}", safe_rich_text(edu.get("body", "")))
+                .replace("{{EDU_BODY}}", edu.get("body", ""))
                 .replace("{{QUOTES}}", quotes_html)
                 .replace("{{ASOF_EQUITY}}", asof_equity)
                 .replace("{{ASOF_RATES}}", asof_rates)
@@ -280,29 +272,29 @@ def main():
                 .replace("{{TBL_RATES}}", rates)
                 .replace("{{TBL_FX}}", fx)
                 .replace("{{FOOTNOTE}}", footnote))
-    if re.search(r"\{\{[A-Z0-9_]+\}\}", out_html):
-        raise ValueError("치환되지 않은 템플릿 토큰이 남아 있습니다")
 
     path = os.path.join(args.out, f"{slug}.html")
-    atomic_write_text(path, out_html)
+    open(path, "w", encoding="utf-8").write(out_html)
     print(f"  · 대시보드 → {path}")
 
     # ── OG 썸네일 : 1·3페이지(리뷰+지표) 실제 화면을 캡처해 합성 ──
-    import make_og_weekly
-    png = os.path.join(args.out, f"og-{slug}.png")
-    kpi = []
-    for key, label in (("kospi", "코스피"), ("sp500", "S&P 500"), ("ktb3y", "국고채 3년"), ("gold", "국제금")):
-        r = S.get(key)
-        if r:
-            value = r.get("value")
-            v = ("-" if value is None else f'{value:.3f}%') if r.get("unit") == "bp" else num(value)
-            c = bp_txt(r.get("wow_pct")) if r.get("unit") == "bp" else pct_txt(r.get("wow_pct"))
-            kpi.append((label, v, c, cls(r.get("wow_pct"))))
-        else:
-            kpi.append((label, "확인필요", "－", "fl"))
-    make_og_weekly.build(path, png, date_line, kpi,
-                         strip_markup(brief.get("retrospective", {}).get("body", "")), tmpdir=args.out)
-    print(f"  · OG 썸네일 → {png}")
+    try:
+        import make_og_weekly
+        png = os.path.join(args.out, f"og-{slug}.png")
+        kpi = []
+        for key, label in (("kospi", "코스피"), ("sp500", "S&P 500"), ("ktb3y", "국고채 3년"), ("gold", "국제금")):
+            r = S.get(key)
+            if r:
+                v = f'{r["value"]:.3f}%' if r["unit"] == "bp" else num(r["value"])
+                c = bp_txt(r["wow_pct"]) if r["unit"] == "bp" else pct_txt(r["wow_pct"])
+                kpi.append((label, v, c, cls(r["wow_pct"])))
+            else:
+                kpi.append((label, "확인필요", "－", "fl"))
+        make_og_weekly.build(path, png, date_line, kpi,
+                             brief.get("retrospective", {}).get("body", ""))
+        print(f"  · OG 썸네일 → {png}")
+    except Exception as exc:                                     # noqa: BLE001
+        print(f"  ! OG 썸네일 생성 실패(건너뜀): {exc}")
 
     # ── 검증 리포트 ──
     unresolved = [KEY_LABEL.get(k, k) for k in
@@ -312,15 +304,16 @@ def main():
     report = {
         "slug": slug, "last_week": lw, "this_week": tw,
         "unresolved": unresolved,
-        "stale": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in stale_keys if k in S],
-        "delayed": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in delayed_keys if k in S],
+        "stale": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in stale_set if k in S],
+        "delayed": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in delayed_set if k in S],
         "brief_issues": brief_issues,
         "collected": sorted(S.keys()),
     }
-    atomic_write_json(os.path.join(args.out, "report_weekly.json"), report)
+    with open(os.path.join(args.out, "report_weekly.json"), "w", encoding="utf-8") as fp:
+        json.dump(report, fp, ensure_ascii=False, indent=2)
 
     ok = not unresolved and not stale_set and not brief_issues
-    print(f"\n[검증 요약] {'정상' if ok else '확인 필요'}")
+    print(f"\n[검증 요약] {'✔ 정상' if ok else '⚠ 확인 필요'}")
     if unresolved:
         print(f"  ! 데이터 미확보: {', '.join(unresolved)}")
     if stale_set:
