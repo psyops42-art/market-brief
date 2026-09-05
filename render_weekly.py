@@ -278,6 +278,7 @@ def main():
     print(f"  · 대시보드 → {path}")
 
     # ── OG 썸네일 : 1·3페이지(리뷰+지표) 실제 화면을 캡처해 합성 ──
+    og_ok, og_error = False, ""
     try:
         import make_og_weekly
         png = os.path.join(args.out, f"og-{slug}.png")
@@ -293,8 +294,12 @@ def main():
         make_og_weekly.build(path, png, date_line, kpi,
                              brief.get("retrospective", {}).get("body", ""))
         print(f"  · OG 썸네일 → {png}")
+        og_ok = True
     except Exception as exc:                                     # noqa: BLE001
-        print(f"  ! OG 썸네일 생성 실패(건너뜀): {exc}")
+        og_ok = False
+        og_error = f"{type(exc).__name__}: {exc}"
+        print(f"  ! OG 썸네일 생성 실패: {og_error}")
+        print("    → 카톡 링크 미리보기 이미지가 없습니다. 배포는 계속 진행됩니다.")
 
     # ── 검증 리포트 ──
     unresolved = [KEY_LABEL.get(k, k) for k in
@@ -307,12 +312,14 @@ def main():
         "stale": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in stale_set if k in S],
         "delayed": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in delayed_set if k in S],
         "brief_issues": brief_issues,
+        "og_ok": og_ok,
+        "og_error": og_error,
         "collected": sorted(S.keys()),
     }
     with open(os.path.join(args.out, "report_weekly.json"), "w", encoding="utf-8") as fp:
         json.dump(report, fp, ensure_ascii=False, indent=2)
 
-    ok = not unresolved and not stale_set and not brief_issues
+    ok = not unresolved and not stale_set and not brief_issues and og_ok
     print(f"\n[검증 요약] {'✔ 정상' if ok else '⚠ 확인 필요'}")
     if unresolved:
         print(f"  ! 데이터 미확보: {', '.join(unresolved)}")
@@ -324,6 +331,8 @@ def main():
         print(f"  ! 확인필요(내용): {len(brief_issues)}건")
         for i in brief_issues:
             print(f"      - {i}")
+    if not og_ok:
+        print(f"  ! OG 썸네일 없음: {og_error}")
 
 
 if __name__ == "__main__":
