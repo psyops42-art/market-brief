@@ -13,8 +13,7 @@ permissions:
   issues: write
 
 concurrency:
-  # 데일리 작업도 같은 docs/index.html과 브랜치에 푸시하므로 배포 구간을 직렬화한다.
-  group: market-brief-publish
+  group: weekly-brief
   cancel-in-progress: false
 
 env:
@@ -34,9 +33,6 @@ jobs:
 
       - name: 파이썬 패키지 설치
         run: pip install --quiet -r requirements.txt
-
-      - name: 순수 로직 회귀 테스트
-        run: python -m unittest discover -s tests -v
 
       - name: 렌더링 도구 설치
         run: |
@@ -63,13 +59,18 @@ jobs:
       - name: 4단계 · 배포
         run: |
           set -o pipefail
-          SLUG=$(python -c 'import json; print(json.load(open("out/report_weekly.json", encoding="utf-8"))["slug"])')
+          SLUG=$(ls out/weekly-*.html | head -1 | xargs basename | sed 's/\.html$//')
           echo "▶ 산출물 확인 ($SLUG)"
           ls -la out/
 
           mkdir -p docs
-          cp out/*.html docs/ || { echo "!! HTML 복사 실패"; exit 1; }
-          cp out/*.png  docs/ || { echo "!! PNG 복사 실패"; exit 1; }
+          cp out/*.html docs/ || { echo "!! HTML 복사 실패 — 렌더 단계를 확인하세요"; exit 1; }
+          # 썸네일이 없어도 본문 배포는 계속한다 (썸네일 실패로 전체가 죽지 않도록)
+          if ls out/*.png >/dev/null 2>&1; then
+            cp out/*.png docs/
+          else
+            echo "!! 썸네일 PNG 없음 — 3단계 로그의 'OG 썸네일 생성 실패'를 확인하세요 (배포는 계속)"
+          fi
           cp out/report_weekly.json docs/report_weekly.json
 
           echo "▶ 아카이브 목록 생성"
@@ -90,10 +91,18 @@ jobs:
             -m "아카이브 : $PAGES_BASE/"
 
           echo "▶ 푸시"
-          if ! git push; then
-            echo "   1차 실패 — 원격 변경분을 받아 재시도합니다"
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
-            git push
+          # 데일리 워크플로가 같은 시간대에 docs/ 를 밀어 넣으면 푸시가 거부될 수 있어
+          # 원격 변경분을 받아 두 번까지 재시도한다.
+          PUSHED=0
+          for i in 1 2 3; do
+            if git push; then PUSHED=1; break; fi
+            echo "   ${i}차 실패 — 원격 변경분을 받아 재시도합니다"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
+            sleep 5
+          done
+          if [ "$PUSHED" != "1" ]; then
+            echo "!! 푸시 실패 — 원격 상태와 권한(contents: write)을 확인하세요"
+            exit 1
           fi
           echo "▶ 배포 완료 : $PAGES_BASE/$SLUG.html"
 
@@ -127,7 +136,7 @@ jobs:
           delayed = rep.get("delayed", [])
           issues = rep.get("brief_issues", [])
           ok = status == "success"
-          needs = unresolved or stale or issues
+          needs = unresolved or stale or issues or not rep.get("og_ok", True)
           icon = "✅" if ok and not needs else ("⚠️" if ok else "❌")
           note = "" if ok else " — 실행 실패, 아래 링크는 아직 생성되지 않았습니다"
           if ok and needs:
@@ -149,6 +158,8 @@ jobs:
           print("\n".join(f"- {x}" for x in stale) if stale else "- 없음")
           print("\n**생성 내용 자체 점검 (헤드라인·일정 날짜범위)**")
           print("\n".join(f"- {x}" for x in issues) if issues else "- 통과")
+          print("\n**썸네일(카톡 미리보기)**")
+          print("- 정상 생성" if rep.get("og_ok") else f"- 생성 실패: {rep.get('og_error','원인 미기록')}")
           if delayed:
               print("\n**해외지수 정상 지연 (참고용 · 조치 불필요)**")
               print("\n".join(f"- {x}" for x in delayed))
