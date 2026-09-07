@@ -117,6 +117,109 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("－", row)
 
 
+class NewsFreshnessTests(unittest.TestCase):
+    day = dt.date(2026, 9, 7)
+
+    def fresh_brief(self):
+        def item(i):
+            return {"title": "새로운 보도", "body": "최신 기사에 근거한 설명",
+                    "source": "매체 · 9/7", "sources": [{"name": "매체",
+                    "url": f"https://example.test/news/{i}",
+                    "published_at": "2026-09-07T06:00:00+09:00"}]}
+        return {"headlines": [item(i) for i in range(3)], "checkpoint": item(3),
+                "mindset": [{"title": "원칙", "body": "분산"}] * 3,
+                "quotes": ["<b>분산</b>이 필요합니다."] * 3,
+                "og_description": "최신 요약", "oneline_market": "시장 요약",
+                "oneline_pension": "연금 요약", "next_events": "예정 일정"}
+
+    def urls(self):
+        return {f"https://example.test/news/{i}" for i in range(4)}
+
+    def test_news_window_is_independent_of_friday_close(self):
+        self.assertEqual(make_brief.validate(self.fresh_brief(), "2026-09-04", self.day), [])
+        start, end = make_brief.news_window(self.day)
+        self.assertEqual(start.isoformat(), "2026-09-05T07:00:00+09:00")
+        self.assertEqual(end.isoformat(), "2026-09-07T07:00:00+09:00")
+
+    def test_old_checkpoint_is_rejected_even_with_a_recent_secondary_source(self):
+        for reverse in (False, True):
+            brief = self.fresh_brief()
+            old = {"name": "과거 매체", "url": "https://example.test/old",
+                   "published_at": "2026-08-27T09:00:00+09:00"}
+            brief["checkpoint"]["sources"].append(old)
+            if reverse:
+                brief["checkpoint"]["sources"].reverse()
+            brief["checkpoint"]["source"] = "매체 · 9/7, 과거 매체 · 8/27"
+            with self.subTest(reverse=reverse):
+                issues = make_brief.news_issues(brief, self.day)
+                self.assertTrue(any("국내 체크포인트" in x and "기간" in x for x in issues))
+
+    def test_stale_future_and_missing_timezone_are_rejected(self):
+        for timestamp in ("2026-09-04T23:00:00+09:00", "2026-09-07T07:00:01+09:00",
+                          "2026-09-07", "2026-09-07T06:00:00", None):
+            brief = self.fresh_brief()
+            brief["headlines"][0]["sources"][0]["published_at"] = timestamp
+            with self.subTest(timestamp=timestamp):
+                self.assertTrue(make_brief.news_issues(brief, self.day))
+
+    def test_timezone_conversion_and_year_boundary(self):
+        for day, timestamp, display in (
+            (self.day, "2026-09-06T17:00:00-04:00", "9/6"),
+            (dt.date(2027, 1, 1), "2026-12-31T17:00:00-05:00", "12/31"),
+        ):
+            brief = self.fresh_brief()
+            for item in brief["headlines"] + [brief["checkpoint"]]:
+                item["sources"][0]["published_at"] = timestamp
+                item["source"] = f"매체 · {display}"
+            self.assertEqual(make_brief.news_issues(brief, day), [])
+
+    def test_old_display_date_cannot_be_hidden_by_fresh_metadata(self):
+        brief = self.fresh_brief()
+        brief["checkpoint"]["source"] += ", 과거 매체 · 8/27"
+        self.assertTrue(make_brief.news_issues(brief, self.day))
+
+    def test_unsearched_url_and_missing_sources_are_rejected(self):
+        brief = self.fresh_brief()
+        self.assertTrue(make_brief.news_issues(brief, self.day, set()))
+        del brief["checkpoint"]["sources"]
+        self.assertTrue(make_brief.news_issues(brief, self.day, self.urls()))
+
+    def test_only_actual_search_results_count_as_evidence(self):
+        payload = [{"type": "text", "text": "https://example.test/invented"},
+                   {"type": "web_search_tool_result", "content": [
+                       {"type": "web_search_result", "url": "https://example.test/real"}]},
+                   {"type": "web_search_tool_result", "content": {
+                       "type": "web_search_tool_result_error", "error_code": "unavailable"}}]
+        self.assertEqual(make_brief.search_result_urls(payload), {"https://example.test/real"})
+
+    def test_failed_freshness_triggers_new_search_then_accepts_correction(self):
+        bad = self.fresh_brief()
+        bad["checkpoint"]["sources"][0]["published_at"] = "2026-08-27T06:00:00+09:00"
+        responses = iter([bad, self.fresh_brief()])
+        def api(prompt, key, source_urls):
+            source_urls.update(self.urls())
+            return json.dumps(next(responses))
+        with mock.patch.object(make_brief, "call_api", side_effect=api) as call, redirect_stdout(io.StringIO()):
+            result = make_brief.generate_fresh_brief("원래 조건", "test", self.day)
+        self.assertEqual(call.call_count, 2)
+        self.assertIn("국내 체크포인트", call.call_args.args[0])
+        self.assertEqual(result, self.fresh_brief())
+
+    def test_repeated_failure_does_not_write_output(self):
+        with tempfile.TemporaryDirectory() as temp:
+            data = Path(temp) / "data.json"
+            out = Path(temp) / "brief.json"
+            data.write_text(json.dumps({"briefing_date": "2026-09-07", "cutoff": "2026-09-04",
+                                        "series": {}}), encoding="utf-8")
+            with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test"}), \
+                    mock.patch.object(sys, "argv", ["make_brief.py", "--data", str(data), "--out", str(out)]), \
+                    mock.patch.object(make_brief, "call_api", return_value=json.dumps(self.fresh_brief())) as call, \
+                    redirect_stdout(io.StringIO()), self.assertRaises(ValueError):
+                make_brief.main()  # No actual search evidence: both attempts must fail.
+            self.assertEqual(call.call_count, 2)
+            self.assertFalse(out.exists())
+
+
 class RenderSmokeTests(unittest.TestCase):
     def test_daily_main_renders_with_missing_optional_data(self):
         root = Path(__file__).resolve().parents[1]
