@@ -205,7 +205,7 @@ class NewsFreshnessTests(unittest.TestCase):
         self.assertIn("국내 체크포인트", call.call_args.args[0])
         self.assertEqual(result, self.fresh_brief())
 
-    def test_repeated_failure_does_not_write_output(self):
+    def test_repeated_failure_writes_honest_renderable_output(self):
         with tempfile.TemporaryDirectory() as temp:
             data = Path(temp) / "data.json"
             out = Path(temp) / "brief.json"
@@ -214,10 +214,55 @@ class NewsFreshnessTests(unittest.TestCase):
             with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test"}), \
                     mock.patch.object(sys, "argv", ["make_brief.py", "--data", str(data), "--out", str(out)]), \
                     mock.patch.object(make_brief, "call_api", return_value=json.dumps(self.fresh_brief())) as call, \
-                    redirect_stdout(io.StringIO()), self.assertRaises(ValueError):
+                    redirect_stdout(io.StringIO()):
                 make_brief.main()  # No actual search evidence: both attempts must fail.
             self.assertEqual(call.call_count, 2)
-            self.assertFalse(out.exists())
+            result = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(result["_news_status"], "partial")
+            self.assertTrue(result["_issues"])
+            html = render.build_news(result)
+            self.assertIn("최신 보도 미확보", html)
+            self.assertNotIn("최신 기사에 근거한 설명", html)
+            self.assertEqual(len(result["headlines"]), 3)
+            rendered = Path(temp) / "out"
+            template = Path(__file__).resolve().parents[1] / "template.html"
+            with mock.patch.object(sys, "argv", ["render.py", "--data", str(data), "--brief", str(out),
+                                                "--template", str(template), "--out", str(rendered)]), \
+                    mock.patch.object(render.make_og, "build", create=True), redirect_stdout(io.StringIO()):
+                render.main()
+            self.assertIn("최신 보도 미확보", (rendered / "2026-09-07.html").read_text(encoding="utf-8"))
+            report = json.loads((rendered / "report.json").read_text(encoding="utf-8"))
+            self.assertTrue(report["brief_issues"])
+
+    def test_partial_failure_keeps_good_cards_and_removes_old_summary(self):
+        bad = self.fresh_brief()
+        for item in (bad["headlines"][0], bad["checkpoint"]):
+            item["sources"][0]["published_at"] = "2026-08-27T06:00:00+09:00"
+            item["body"] = "오래된 국채 매입 뉴스"
+        for key in ("og_description", "oneline_market", "oneline_pension", "next_events"):
+            bad[key] = "오래된 국채 매입 뉴스"
+        bad["mindset"][0]["body"] = "오래된 국채 매입 뉴스"
+        bad["quotes"][0] = "오래된 국채 매입 뉴스"
+        def api(prompt, key, source_urls):
+            source_urls.update(self.urls())
+            return json.dumps(bad)
+        with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
+            result = make_brief.generate_fresh_brief("원래 조건", "test", self.day)
+        self.assertEqual(result["headlines"][1:], bad["headlines"][1:])
+        self.assertNotIn("오래된 국채 매입 뉴스", json.dumps(result, ensure_ascii=False))
+        self.assertEqual(result["headlines"][0]["sources"], [])
+        self.assertEqual(result["checkpoint"]["sources"], [])
+
+    def test_display_mismatch_is_excluded_without_relabeling(self):
+        bad = self.fresh_brief()
+        bad["checkpoint"]["source"] = "매체 · 8/27"
+        def api(prompt, key, source_urls):
+            source_urls.update(self.urls())
+            return json.dumps(bad)
+        with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
+            result = make_brief.generate_fresh_brief("원래 조건", "test", self.day)
+        self.assertEqual(result["headlines"], bad["headlines"])
+        self.assertEqual(result["checkpoint"]["sources"], [])
 
 
 class RenderSmokeTests(unittest.TestCase):

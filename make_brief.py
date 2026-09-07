@@ -154,6 +154,8 @@ def news_issues(b: dict, today: dt.date, source_urls: set | None = None) -> list
         if not isinstance(item, dict):
             issues.append(f"{label} 누락 또는 형식 오류")
             continue
+        if not all(isinstance(item.get(k), str) and item[k].strip() for k in ("title", "body")):
+            issues.append(f"{label}: 제목 또는 본문 누락")
         sources = item.get("sources")
         published_dates = []
         if not isinstance(sources, list) or not sources:
@@ -231,7 +233,41 @@ def generate_fresh_brief(prompt: str, key: str, today: dt.date) -> dict:
             request = (prompt + "\n[직전 응답 검증 실패 — 아래 항목을 해결해 전체 JSON을 새로 작성]\n"
                        + "\n".join(issues)
                        + "\n이전 응답의 날짜만 바꾸지 말고 조건에 맞는 다른 최신 기사를 검색하세요.")
-    raise ValueError("뉴스 최신성 검증 실패: " + "; ".join(issues))
+    # A failed card must not block prices or leak into summaries/preview text.
+    # Keep the final draft's valid cards; never relabel old publication dates.
+    headlines = brief.get("headlines")
+    headlines = headlines[:3] if isinstance(headlines, list) else []
+    headlines += [None] * (3 - len(headlines))
+    items = headlines + [brief.get("checkpoint")]
+    labels = [f"헤드라인 {i}" for i in range(1, 4)] + ["국내 체크포인트"]
+    warnings = []
+    for i, (label, item) in enumerate(zip(labels, items)):
+        reasons = [issue for issue in issues if issue.startswith(label)]
+        if item is None or reasons:
+            warnings.append(f"{label}: 최신 보도 미확보 — " + "; ".join(reasons or ["항목 누락"]))
+            items[i] = {
+                "title": f"{label} · 최신 보도 미확보",
+                "body": "기준시각 이전 48시간 내 보도의 출처와 발행일을 확인하지 못했습니다. 확인되지 않은 기사는 표시하지 않습니다.",
+                "source": "최신 보도 미확보", "sources": [],
+            }
+    # Rebuild from an allowlist: no rejected draft text in downstream fields.
+    print("  ! 재검색 후에도 검증되지 않은 기사를 제외하고 브리핑을 생성합니다")
+    return {
+        "headlines": items[:3], "checkpoint": items[3],
+        "og_description": "일부 최신 뉴스 확인이 제한된 브리핑입니다. 시장지표는 각 항목의 기준일을 확인하세요.",
+        "mindset": [
+            {"title": "뉴스 확인 제한", "body": "일부 보도의 최신성을 확인하지 못해 오늘의 뉴스 기반 시장 해석을 생략합니다."},
+            {"title": "Core와 Satellite", "body": "TDF와 ETF의 역할 및 기존 자산배분 비중을 점검합니다."},
+            {"title": "장기투자 원칙", "body": "투자기간과 위험 감수 수준을 바탕으로 분산 원칙을 점검합니다."},
+        ],
+        "quotes": ["일부 최신 뉴스는 <b>확인 제한</b> 상태입니다.",
+                   "시장 수치는 <b>개별 기준일 확인</b>이 필요합니다.",
+                   "뉴스 기반 시장 해석은 <b>확인 후 제공</b> 대상입니다."],
+        "oneline_market": "일부 최신 보도 미확보로 뉴스 기반 시장 해석을 생략합니다.",
+        "oneline_pension": "일반 점검: 투자기간과 자산배분 비중을 확인하세요.",
+        "next_events": "향후 일정은 공식 발표를 별도로 확인하세요.",
+        "_news_status": "partial", "_news_issues": warnings or issues,
+    }
 
 
 def main():
@@ -294,7 +330,7 @@ def main():
 
     print("[생성] Claude API 호출 (웹검색 포함)...")
     brief = generate_fresh_brief(prompt, key, today)
-    issues = validate(brief, data.get("cutoff"), today)
+    issues = brief.get("_news_issues", []) + validate(brief, data.get("cutoff"), today)
     brief["_news_window"] = {"start": news_start.isoformat(), "end": news_end.isoformat()}
     brief["_issues"] = issues
     atomic_write_json(args.out, brief)
