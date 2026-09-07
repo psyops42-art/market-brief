@@ -32,7 +32,12 @@ WD_KR = ["월", "화", "수", "목", "금", "토", "일"]
 # ─────────────────────────────── 표시 헬퍼
 
 def fmt_date(iso):
-    d = dt.date.fromisoformat(iso)
+    if not iso:
+        return "-"
+    try:
+        d = dt.date.fromisoformat(iso)
+    except (ValueError, TypeError):
+        return "-"
     return f"{d.month}/{d.day}"
 
 
@@ -67,42 +72,57 @@ def bp_txt(v):
 
 # ─────────────────────────────── 표 행 렌더링
 
+KEY_LABEL = {"sp500": "S&P 500", "ndx": "나스닥 100", "kospi": "코스피",
+             "shcomp": "상해종합", "sx5e": "유로스톡스 50",
+             "ktb3y": "국고채 3년", "ktb10y": "국고채 10년",
+             "ust10y": "미국채 10년", "ust30y": "미국채 30년",
+             "usdkrw": "달러/원", "gold": "국제금", "wti": "유가 WTI", "btc": "비트코인"}
+
+
 BADGE_LABEL = {"kr": "국내", "us": "미국", "cn": "중국", "eu": "유럽",
                "cr": "가상자산", "fx": "환율", "cm": "원자재"}
 
 
 def row_html(key, r, stale_set, delayed_set, value_fmt=lambda v: num(v)):
     """데일리와 동일한 구조: 이름 → 회색 소제목(sub) 한 줄 → 값/등락.
-    주간은 sub 자리에 기준일과 지연 안내를 담는다."""
-    label = BADGE_LABEL.get(r["badge"], "")
-    badge_html = f'<span class="bd {r["badge"]}">{label}</span>' if label else ""
+    주간은 sub 자리에 기준일과 지연 안내를 담는다.
+
+    수집이 부분적으로 실패해 일부 필드가 비어 있어도 렌더링이 중단되지 않도록
+    모든 항목을 .get() 으로 안전하게 읽는다. 빈 값은 '-' 로 표시된다."""
+    badge = r.get("badge", "")
+    label = BADGE_LABEL.get(badge, "")
+    badge_html = f'<span class="bd {badge}">{label}</span>' if label else ""
+    name = r.get("label") or KEY_LABEL.get(key, key)
+    unit = r.get("unit", "price")
 
     # 소제목: 기준일 + (필요 시) 지연 안내. 데일리처럼 한 줄로 붙인다.
-    sub = f'{fmt_date(r["asof"])} 종가'
+    asof = r.get("asof")
+    sub = f'{fmt_date(asof)} 종가' if asof else "기준일 확인필요"
     if key in stale_set:
-        sub += f' · ⚠ 최신 아님'
+        sub += ' · ⚠ 최신 아님'
     elif key in delayed_set:
         sub += ' · 1일 지연'
 
-    val = f'{r["value"]:.3f}%' if r["unit"] == "bp" else value_fmt(r["value"])
-    wow = bp_txt(r["wow_pct"]) if r["unit"] == "bp" else pct_txt(r["wow_pct"])
-    ytd = bp_txt(r["ytd_pct"]) if r["unit"] == "bp" else pct_txt(r["ytd_pct"])
+    value = r.get("value")
+    if value is None:
+        val = "-"
+    elif unit == "bp":
+        val = f'{value:.3f}%'
+    else:
+        val = value_fmt(value)
+
+    wow_v, ytd_v = r.get("wow_pct"), r.get("ytd_pct")
+    wow = bp_txt(wow_v) if unit == "bp" else pct_txt(wow_v)
+    ytd = bp_txt(ytd_v) if unit == "bp" else pct_txt(ytd_v)
     return (
         '        <div class="row">\n'
-        f'          <div class="c1"><div class="nm">{badge_html}{html.escape(r["label"])}</div>\n'
+        f'          <div class="c1"><div class="nm">{badge_html}{html.escape(str(name))}</div>\n'
         f'            <div class="sub">{sub}</div></div>\n'
         f'          <div class="c2">{val}</div>'
-        f'<div class="c3 {cls(r["wow_pct"])}">{wow}</div>'
-        f'<div class="c4 {cls(r["ytd_pct"])}">{ytd}</div>\n'
+        f'<div class="c3 {cls(wow_v)}">{wow}</div>'
+        f'<div class="c4 {cls(ytd_v)}">{ytd}</div>\n'
         '        </div>'
     )
-
-
-KEY_LABEL = {"sp500": "S&P 500", "ndx": "나스닥 100", "kospi": "코스피",
-             "shcomp": "상해종합", "sx5e": "유로스톡스 50",
-             "ktb3y": "국고채 3년", "ktb10y": "국고채 10년",
-             "ust10y": "미국채 10년", "ust30y": "미국채 30년",
-             "usdkrw": "달러/원", "gold": "국제금", "wti": "유가 WTI", "btc": "비트코인"}
 
 
 def build_table(series, keys, stale_set, delayed_set):
