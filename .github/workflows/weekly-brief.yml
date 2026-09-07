@@ -35,9 +35,8 @@ jobs:
         run: pip install --quiet -r requirements.txt
 
       - name: 렌더링 도구 설치
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq wkhtmltopdf fonts-noto-cjk fonts-noto-cjk-extra
+        timeout-minutes: 6
+        run: bash scripts/install-render-tools.sh
 
       - name: 1단계 · 주간 데이터 수집
         env:
