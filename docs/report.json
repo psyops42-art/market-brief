@@ -1,7 +1,7 @@
 {
   "slug": "2026-09-07",
   "unresolved": [],
-  "cutoff": "2026-09-07",
+  "cutoff": "2026-09-04",
   "stale": [],
   "delayed": [],
   "collected": [
@@ -26,8 +26,5 @@
     "vix",
     "wti"
   ],
-  "brief_issues": [
-    "정리문장 2이 48자로 김 (45자 제한)",
-    "정리문장 3이 47자로 김 (45자 제한)"
-  ]
+  "brief_issues": []
 }
