@@ -23,6 +23,7 @@ import datetime as dt
 import html
 import json
 import os
+import re
 import subprocess
 
 KST = dt.timezone(dt.timedelta(hours=9))
@@ -31,15 +32,31 @@ WD_KR = ["월", "화", "수", "목", "금", "토", "일"]
 
 # ─────────────────────────────── 표시 헬퍼
 
+EMPTY = "－"          # 데일리와 동일한 '값 없음' 기호(전각 하이픈)
+
+
 def fmt_date(iso):
     if not iso:
-        return "-"
+        return EMPTY
     try:
         d = dt.date.fromisoformat(iso)
     except (ValueError, TypeError):
-        return "-"
+        return EMPTY
     return f"{d.month}/{d.day}"
 
+
+def safe_html(text) -> str:
+    """LLM이 생성한 문장을 HTML에 넣을 때 쓰는 안전 변환.
+
+    본문에는 <b> 강조만 허용한다. 전체를 이스케이프한 뒤 순수한 <b>...</b>
+    '쌍'만 되살리므로 아래가 모두 보장된다.
+      · <script>, <img onerror=...> 등은 문자로 표시되어 실행되지 않는다
+      · 속성이 붙은 <b foo=..> 도 허용하지 않는다
+      · 짝이 맞지 않는 </b> 가 남아 이후 문장이 굵어지는 일이 없다
+    """
+    escaped = html.escape(str(text or ""))
+    # 여는 태그와 닫는 태그가 짝을 이루는 경우에만 복원한다
+    return re.sub(r"&lt;b&gt;(.*?)&lt;/b&gt;", r"<b>\1</b>", escaped, flags=re.S)
 
 def cls(v):
     if v is None:
@@ -54,19 +71,19 @@ def arrow(v):
 
 
 def num(v, nd=2):
-    return "-" if v is None else f"{v:,.{nd}f}"
+    return EMPTY if v is None else f"{v:,.{nd}f}"
 
 
 def pct_txt(v, nd=2):
     """데일리와 동일한 등락 표기: 화살표 + 절대값 (부호는 화살표가 대신한다)"""
     if v is None:
-        return "-"
+        return EMPTY
     return f"{arrow(v)} {abs(v):.{nd}f}%"
 
 
 def bp_txt(v):
     if v is None:
-        return "-"
+        return EMPTY
     return f"{arrow(v)} {abs(v):.1f}bp"
 
 
@@ -105,7 +122,7 @@ def row_html(key, r, stale_set, delayed_set, value_fmt=lambda v: num(v)):
 
     value = r.get("value")
     if value is None:
-        val = "-"
+        val = EMPTY
     elif unit == "bp":
         val = f'{value:.3f}%'
     else:
@@ -146,7 +163,7 @@ def build_news(brief):
     for i, n in enumerate(brief.get("last_week_headlines", [])[:3], 1):
         out.append('      <div class="news">\n'
                    f'        <div class="h"><em>{icons[i-1]}</em>{html.escape(n.get("title",""))}</div>\n'
-                   f'        <div class="d">{n.get("body","")}</div>\n'
+                   f'        <div class="d">{safe_html(n.get("body"))}</div>\n'
                    f'        <div class="s">{html.escape(n.get("source",""))}</div>\n'
                    '      </div>')
     return "\n".join(out)
@@ -178,14 +195,14 @@ def build_calendar(brief):
     rows = []
     for c in brief.get("checkpoints", []):
         wd_class = "wd today" if c.get("highlight") else "wd"
-        date_txt = html.escape(c.get("date", ""))
-        body = c.get("text", "")
+        date_txt = html.escape(str(c.get("date", "")))
+        body = safe_html(c.get("text"))
         if c.get("highlight"):
             body = f'<b>{body}</b>'
-        rows.append(f'        <div class="d"><div class="{wd_class}">{html.escape(c.get("day",""))}</div>'
+        rows.append(f'        <div class="d"><div class="{wd_class}">{html.escape(str(c.get("day","")))}</div>'
                     f'<div class="ev"><b>{date_txt}</b> {body}</div></div>')
     if not rows:
-        rows.append('        <div class="d"><div class="wd">-</div>'
+        rows.append(f'        <div class="d"><div class="wd">{EMPTY}</div>'
                     '<div class="ev">확인필요 — 일정 미생성</div></div>')
     return '      <div class="cal">\n' + "\n".join(rows) + '\n      </div>'
 
@@ -235,18 +252,18 @@ def main():
     retro = brief.get("retrospective", {"title": "확인필요", "body": "회고 데이터가 생성되지 않았습니다."})
     retro_card = ('      <div class="mind">\n        <div class="n">RETROSPECTIVE</div>\n'
                  f'        <div class="t">{html.escape(retro.get("title",""))}</div>\n'
-                 f'        <div class="b">{retro.get("body","")}</div>\n      </div>')
+                 f'        <div class="b">{safe_html(retro.get("body"))}</div>\n      </div>')
 
     m01 = brief.get("mindset_01", {"title": "확인필요", "body": "생성되지 않았습니다."})
     mindset01 = ('      <div class="mind">\n        <div class="n">MINDSET 01</div>\n'
                 f'        <div class="t">{html.escape(m01.get("title",""))}</div>\n'
-                f'        <div class="b">{m01.get("body","")}</div>\n      </div>')
+                f'        <div class="b">{safe_html(m01.get("body"))}</div>\n      </div>')
 
     edu = brief.get("education", {"title": "", "body": ""})
     rebal = brief.get("rebalance_note", {"title": "", "body": ""})
 
     quotes = brief.get("quotes", [])
-    quotes_html = "\n".join(f'        <p>{q}</p>' for q in quotes) or '        <p>확인필요</p>'
+    quotes_html = "\n".join(f'        <p>{safe_html(q)}</p>' for q in quotes) or '        <p>확인필요</p>'
 
     miss = data.get("missing") or []
     footnote_lines = [
@@ -273,7 +290,7 @@ def main():
     tpl = open(args.template, encoding="utf-8").read()
     out_html = (tpl
                 .replace("{{TITLE}}", html.escape(title))
-                .replace("{{OG_DESC}}", html.escape(brief.get("og_description", "")))
+                .replace("{{OG_DESC}}", html.escape(str(brief.get("og_description", ""))))
                 .replace("{{OG_URL}}", f"{args.base}/{slug}.html")
                 .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png")
                 .replace("{{DATE_LINE}}", date_line)
@@ -283,9 +300,9 @@ def main():
                 .replace("{{CALENDAR}}", calendar)
                 .replace("{{MINDSET_01}}", mindset01)
                 .replace("{{REBAL_TITLE}}", html.escape(rebal.get("title", "")))
-                .replace("{{REBAL_BODY}}", rebal.get("body", ""))
+                .replace("{{REBAL_BODY}}", safe_html(rebal.get("body")))
                 .replace("{{EDU_TITLE}}", html.escape(edu.get("title", "")))
-                .replace("{{EDU_BODY}}", edu.get("body", ""))
+                .replace("{{EDU_BODY}}", safe_html(edu.get("body")))
                 .replace("{{QUOTES}}", quotes_html)
                 .replace("{{ASOF_EQUITY}}", asof_equity)
                 .replace("{{ASOF_RATES}}", asof_rates)
