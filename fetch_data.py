@@ -24,7 +24,7 @@ import os
 import sys
 
 import requests
-from pipeline_utils import atomic_write_json
+from pipeline_utils import atomic_write_json, morning_cutoff, validate_daily_dates
 
 try:
     import yfinance as yf
@@ -58,49 +58,6 @@ EXTRA = {"kosdaq": "^KQ11", "dow": "^DJI", "nasdaq_comp": "^IXIC",
          "brent": "BZ=F", "vix": "^VIX", "dax": "^GDAXI"}
 
 
-def _fi_get(fi, *names):
-    """yfinance fast_info 는 버전에 따라 키 표기가 다르다(lastPrice/last_price 등).
-    dict 접근과 속성 접근을 모두 시도해 값을 찾는다."""
-    for n in names:
-        try:
-            v = fi[n]
-            if v is not None:
-                return v
-        except Exception:
-            pass
-        v = getattr(fi, n, None)
-        if v is not None:
-            return v
-    return None
-
-
-def _yahoo_quote_fallback(symbol: str, prior_value, cutoff: str):
-    """history() 가 지연됐을 때 실시간 시세(fast_info)로 최신값을 보정한다.
-
-    일별 히스토리 API보다 실시간 시세 피드가 장 마감 직후 값을
-    먼저 반영하는 경우가 있다. 실시간 시세가 history() 마지막 값과
-    다르면 새 세션이 이미 반영된 것으로 보고 채택한다.
-    이 스크립트는 항상 대상 시장이 열리기 전(KST 07:00)에 실행되므로,
-    이 시점의 실시간 시세는 '진행 중인 시세'가 아니라 '직전 세션의 확정 종가'다.
-    """
-    try:
-        fi = yf.Ticker(symbol).fast_info
-    except Exception as exc:                                    # noqa: BLE001
-        print(f"    ! {symbol} 실시간 시세 조회 실패: {exc}")
-        return None
-    price = _fi_get(fi, "lastPrice", "last_price")
-    prev = _fi_get(fi, "previousClose", "previous_close", "regularMarketPreviousClose")
-    if price is None:
-        return None
-    if prior_value is not None and abs(price - prior_value) < 1e-6:
-        return None                                             # history()와 동일 → 새 정보 없음
-    chg = (price - prev) if prev else None
-    pct = round(chg / prev * 100, 2) if (chg is not None and prev) else None
-    return {"value": round(price, 2),
-            "chg": round(chg, 2) if chg is not None else None,
-            "pct": pct, "asof": cutoff}
-
-
 def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
     """최근 2영업일 종가로 값·등락 계산.
 
@@ -109,7 +66,12 @@ def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
     그대로 두면 헤더의 '8/28 마감 기준' 표기와 행별 기준일이 어긋난다.
     """
     try:
-        hist = yf.Ticker(symbol).history(period=period, interval="1d")
+        if cutoff:
+            end = dt.date.fromisoformat(cutoff) + dt.timedelta(days=1)
+            start = end - dt.timedelta(days=14 if period == "14d" else 31)
+            hist = yf.Ticker(symbol).history(start=start.isoformat(), end=end.isoformat(), interval="1d")
+        else:
+            hist = yf.Ticker(symbol).history(period=period, interval="1d")
         hist = hist.dropna(subset=["Close"])
         if cutoff:
             hist = hist[hist.index.strftime("%Y-%m-%d") <= cutoff]
@@ -126,15 +88,7 @@ def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
 
 
 def yahoo(symbol: str, cutoff: str = None) -> dict | None:
-    """종가 조회. 기준일보다 오래됐으면 두 단계로 최신화를 시도한다.
-
-    1) 조회 기간을 늘려 재조회 (일시적 창 부족일 때 유효)
-    2) 실시간 시세(fast_info)로 대체 (히스토리 API 자체 지연일 때 유효)
-
-    해외 지수는 야후 반영이 늦어 최신 봉이 빠지는 경우가 흔하다.
-    그대로 두면 코스피·상해종합만 며칠 전 값으로 남는다.
-    그래도 남는 지연은 LAG_TOLERANCE로 '정상 지연'인지 검증 단계에서 가른다.
-    """
+    """날짜가 있는 일별 종가만 사용한다. 실시간 시세를 과거 종가로 대체하지 않는다."""
     rec = _yahoo_once(symbol, cutoff, "14d")
 
     if rec and cutoff and rec["asof"] < cutoff:
@@ -143,29 +97,27 @@ def yahoo(symbol: str, cutoff: str = None) -> dict | None:
             print(f"    (재조회로 {rec['asof']} → {retry['asof']} 갱신)")
             rec = retry
 
-    if rec and cutoff and rec["asof"] < cutoff:
-        fresh = _yahoo_quote_fallback(symbol, rec["value"], cutoff)
-        if fresh:
-            print(f"    (실시간 시세로 {rec['asof']} → {cutoff} 보정: "
-                  f"{rec['value']} → {fresh['value']})")
-            rec = fresh
-
     return rec
 
 
-def fred(series: str) -> dict | None:
+def fred(series: str, cutoff: str = None) -> dict | None:
     """FRED 일별 시계열 → 최근 2개 관측치로 bp 변동 계산"""
     key = os.getenv("FRED_API_KEY")
     if not key:
         print("  ! FRED_API_KEY 없음 — 미국채 건너뜀")
         return None
     try:
+        params = {"series_id": series, "api_key": key, "file_type": "json",
+                  "sort_order": "desc", "limit": 10}
+        if cutoff:
+            params["observation_end"] = cutoff
         r = requests.get("https://api.stlouisfed.org/fred/series/observations",
-                         params={"series_id": series, "api_key": key, "file_type": "json",
-                                 "sort_order": "desc", "limit": 10}, timeout=20)
+                         params=params, timeout=20)
         r.raise_for_status()
         payload = r.json()
-        obs = [o for o in payload.get("observations", []) if o.get("value") not in (".", "", None)]
+        obs = [o for o in payload.get("observations", []) if o.get("value") not in (".", "", None)
+               and (not cutoff or o["date"] <= cutoff)]
+        obs.sort(key=lambda o: o["date"], reverse=True)
         if len(obs) < 2:
             return None
         last, prev = float(obs[0]["value"]), float(obs[1]["value"])
@@ -220,7 +172,7 @@ def ecos_discover(key, stat):
     return found, None
 
 
-def ecos(key_name: str) -> dict | None:
+def ecos(key_name: str, cutoff: str = None) -> dict | None:
     """key_name: 'ktb3y' | 'ktb10y'"""
     global _ecos_combo
     key = os.getenv("ECOS_API_KEY")
@@ -228,8 +180,9 @@ def ecos(key_name: str) -> dict | None:
         print("  ! ECOS_API_KEY 없음 — 국고채 건너뜀")
         return None
 
-    end = dt.datetime.now(KST).strftime("%Y%m%d")
-    start = (dt.datetime.now(KST) - dt.timedelta(days=30)).strftime("%Y%m%d")
+    target = dt.date.fromisoformat(cutoff) if cutoff else dt.datetime.now(KST).date()
+    end = target.strftime("%Y%m%d")
+    start = (target - dt.timedelta(days=30)).strftime("%Y%m%d")
     combos = [_ecos_combo] if _ecos_combo else ECOS_CANDIDATES
 
     for stat, cycle in combos:
@@ -254,7 +207,7 @@ def ecos(key_name: str) -> dict | None:
                 print(f"    · {stat}/{cycle} 실패 — {err or '데이터 없음'}")
             continue
 
-        rows = [x for x in rows if x.get("DATA_VALUE")]
+        rows = [x for x in rows if x.get("DATA_VALUE") and x["TIME"] <= end]
         if len(rows) < 2:
             continue
         rows.sort(key=lambda x: x["TIME"])
@@ -274,16 +227,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--print", dest="show", action="store_true")
     ap.add_argument("--out", default="data.json")
+    ap.add_argument("--date", type=dt.date.fromisoformat, help="아침 브리핑 날짜 YYYY-MM-DD (기본: 오늘 KST)")
     args = ap.parse_args()
 
-    out = {"generated_at": dt.datetime.now(KST).isoformat(timespec="seconds"), "series": {}, "missing": []}
+    now = dt.datetime.now(KST)
+    briefing_date = args.date or now.date()
+    cutoff = morning_cutoff(briefing_date).isoformat()
+    out = {"generated_at": now.isoformat(timespec="seconds"),
+           "briefing_date": briefing_date.isoformat(), "cutoff": cutoff,
+           "series": {}, "missing": []}
 
     print("[1/3] Yahoo Finance")
-
-    # 기준일 확정 : 주요 주식시장의 마지막 거래일 중 가장 늦은 쪽
-    anchors = [_yahoo_once(s_, None, "14d") for s_ in ("^GSPC", "^KS11", "^STOXX50E")]
-    cutoff = max([a["asof"] for a in anchors if a], default=None)
-    print(f"  · 기준일 : {cutoff or '확정 실패'} (이후 데이터는 제외)")
+    print(f"  · 아침 브리핑 {briefing_date} / 수집 상한 {cutoff} (이후 데이터는 제외)")
 
     for key, (sym, label, badge, _) in TICKERS.items():
         rec = yahoo(sym, cutoff)
@@ -306,7 +261,7 @@ def main():
             rec.update(unit="bp", chg=round(rec["chg"] * 100, 1), pct=None, symbol=sym, src="Yahoo")
         # 야후가 비었거나 기준일보다 오래되면 FRED 공식치로 대체
         if cutoff and (not rec or rec["asof"] < cutoff):
-            alt = fred(series)
+            alt = fred(series, cutoff)
             if alt and (not rec or alt["asof"] > rec["asof"]):
                 print(f"    ({label}: Yahoo {rec['asof'] if rec else '없음'} → FRED {alt['asof']} 대체)")
                 alt["src"] = "FRED"
@@ -321,7 +276,7 @@ def main():
 
     print("[3/3] 한국은행 ECOS · 국고채")
     for key in ("ktb3y", "ktb10y"):
-        rec = ecos(key)
+        rec = ecos(key, cutoff)
         if rec:
             rec.update(label={"ktb3y": "국고채 3년", "ktb10y": "국고채 10년"}[key], badge="kr")
             out["series"][key] = rec
@@ -366,6 +321,7 @@ def main():
         if not out["delayed"] and not out["stale"]:
             print(f"  · 전 항목이 기준일({cutoff}) 값입니다")
 
+    validate_daily_dates(out, briefing_date)
     atomic_write_json(args.out, out)
 
     got, total = len(out["series"]), len(TICKERS) + 4

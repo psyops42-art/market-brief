@@ -8,13 +8,36 @@ import json
 import os
 import re
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 
 _B_TAG = re.compile(r"&lt;(/?)b&gt;", re.IGNORECASE)
 _ANY_TAG = re.compile(r"<[^>]*>")
+
+
+def morning_cutoff(briefing_date: date) -> date:
+    """Upper bound for a morning edition, independent of the actual run time.
+
+    Holidays are handled by taking each source's last observation on or before
+    this bound, retaining its real date rather than inventing a closing price.
+    """
+    cutoff = briefing_date - timedelta(days=1)
+    while cutoff.weekday() >= 5:
+        cutoff -= timedelta(days=1)
+    return cutoff
+
+
+def validate_daily_dates(data: dict, briefing_date: date) -> None:
+    """Reject future/current-session inputs before generating or publishing."""
+    upper = morning_cutoff(briefing_date)
+    cutoff = date.fromisoformat(data["cutoff"]) if data.get("cutoff") else upper
+    if cutoff > upper:
+        raise ValueError(f"아침 브리핑 {briefing_date}: 기준일 {cutoff}은 상한 {upper} 이후입니다")
+    for key, rec in data.get("series", {}).items():
+        if rec and (not rec.get("asof") or date.fromisoformat(rec["asof"]) > cutoff):
+            raise ValueError(f"{key}: 아침 브리핑 기준일 {cutoff}에 사용할 수 없는 관측일 {rec.get('asof')}")
 
 
 def safe_rich_text(value: Any) -> str:

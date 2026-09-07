@@ -126,10 +126,11 @@ class RenderSmokeTests(unittest.TestCase):
             brief_path = temp_path / "brief.json"
             out_path = temp_path / "out"
             data_path.write_text(json.dumps({
-                "generated_at": "2026-09-03T07:00:00+09:00",
-                "series": {"sp500": {"label": "S&P 500", "badge": "us", "asof": "2026-09-02",
+                "generated_at": "2026-09-07T23:00:00+09:00",
+                "briefing_date": "2026-09-07",
+                "series": {"sp500": {"label": "S&P 500", "badge": "us", "asof": "2026-09-04",
                                       "value": None, "chg": None, "pct": None}},
-                "cutoff": None, "stale": [], "delayed": [],
+                "cutoff": "2026-09-04", "stale": [], "delayed": [],
             }), encoding="utf-8")
             brief_path.write_text(json.dumps({"_issues": ["필수 항목 누락"]}), encoding="utf-8")
 
@@ -139,7 +140,7 @@ class RenderSmokeTests(unittest.TestCase):
             argv = ["render.py", "--data", str(data_path), "--brief", str(brief_path),
                     "--template", str(root / "template.html"), "--out", str(out_path)]
             # Freeze the execution date independently of the older input fixture.
-            now = dt.datetime(2026, 9, 7, 7, tzinfo=render.KST)
+            now = dt.datetime(2026, 9, 8, 23, tzinfo=render.KST)
             with mock.patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()), \
                     mock.patch.object(render.dt, "datetime") as clock, \
                     mock.patch.object(render.make_og, "build", side_effect=fake_og, create=True) as og:
@@ -147,6 +148,8 @@ class RenderSmokeTests(unittest.TestCase):
                 render.main()
             output = (out_path / "2026-09-07.html").read_text(encoding="utf-8")
             self.assertNotIn("{{", output)
+            self.assertIn("美 9/4 뉴욕 마감", output)
+            self.assertNotIn("9/7 종가", output)
             self.assertTrue((out_path / "og-2026-09-07.png").exists())
             report = json.loads((out_path / "report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["slug"], "2026-09-07")

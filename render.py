@@ -21,6 +21,7 @@ import re
 import subprocess
 
 import make_og
+from pipeline_utils import validate_daily_dates
 
 KST = dt.timezone(dt.timedelta(hours=9))
 WD = ["월", "화", "수", "목", "금", "토", "일"]
@@ -179,9 +180,12 @@ def main():
     with open(args.brief, encoding="utf-8") as fp:
         brief = json.load(fp)
     S = data["series"]
+    today = (dt.date.fromisoformat(data["briefing_date"]) if data.get("briefing_date")
+             else dt.datetime.now(KST).date())
+    validate_daily_dates(data, today)
+    UNRESOLVED.clear()
     os.makedirs(args.out, exist_ok=True)
 
-    today = dt.datetime.now(KST).date()
     slug = today.isoformat()
     date_line = (f'{today.year}년 {today.month}월 {today.day}일 ({WD[today.weekday()]}) 아침 · '
                  f'美 {fmt_date(S["sp500"]["asof"]) if "sp500" in S else "-"} 뉴욕 마감 · '

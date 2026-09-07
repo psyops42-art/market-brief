@@ -22,7 +22,7 @@ import time
 
 import requests
 from requests.exceptions import RequestException
-from pipeline_utils import atomic_write_json, has_disallowed_markup, md_date_in_range
+from pipeline_utils import atomic_write_json, has_disallowed_markup, md_date_in_range, validate_daily_dates
 
 KST = dt.timezone(dt.timedelta(hours=9))
 WD = ["월", "화", "수", "목", "금", "토", "일"]
@@ -171,10 +171,14 @@ def main():
 
     with open(args.data, encoding="utf-8") as fp:
         data = json.load(fp)
-    today = dt.datetime.now(KST).date()
+    today = (dt.date.fromisoformat(data["briefing_date"]) if data.get("briefing_date")
+             else dt.datetime.now(KST).date())
+    validate_daily_dates(data, today)
 
     prompt = f"""오늘은 {today.year}년 {today.month}월 {today.day}일 ({WD[today.weekday()]})이다.
-아래는 오늘 아침 자동 수집된 시장 데이터다.
+아래는 {today.isoformat()} 아침용 시장 데이터다. 실제 재실행 시각과 무관하게
+뉴스와 시장 해석은 이 날짜 한국시간 오전 7시까지 알려진 사실만 사용한다.
+당일 장중·마감 결과나 그 이후에 발표된 사건을 이미 일어난 사실로 서술하지 않는다.
 
 [수집 데이터]  (기준일: {data.get("cutoff", "확인 필요")})
 {summarize(data)}
