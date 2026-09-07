@@ -218,8 +218,10 @@ def main():
     ap.add_argument("--out", default="out")
     args = ap.parse_args()
 
-    data = json.load(open(args.data, encoding="utf-8"))
-    brief = json.load(open(args.brief, encoding="utf-8"))
+    with open(args.data, encoding="utf-8") as fp:
+        data = json.load(fp)
+    with open(args.brief, encoding="utf-8") as fp:
+        brief = json.load(fp)
     S = data["series"]
     os.makedirs(args.out, exist_ok=True)
 
@@ -287,7 +289,8 @@ def main():
                               '발송 전 헤드라인·일정 날짜를 확인해 주세요.<br>')
     footnote = "\n".join(footnote_lines)
 
-    tpl = open(args.template, encoding="utf-8").read()
+    with open(args.template, encoding="utf-8") as fp:
+        tpl = fp.read()
     out_html = (tpl
                 .replace("{{TITLE}}", html.escape(title))
                 .replace("{{OG_DESC}}", html.escape(str(brief.get("og_description", ""))))
@@ -313,7 +316,8 @@ def main():
                 .replace("{{FOOTNOTE}}", footnote))
 
     path = os.path.join(args.out, f"{slug}.html")
-    open(path, "w", encoding="utf-8").write(out_html)
+    with open(path, "w", encoding="utf-8") as fp:
+        fp.write(out_html)
     print(f"  · 대시보드 → {path}")
 
     # ── OG 썸네일 : 1·3페이지(리뷰+지표) 실제 화면을 캡처해 합성 ──

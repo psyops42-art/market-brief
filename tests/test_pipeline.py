@@ -48,6 +48,34 @@ class SafetyTests(unittest.TestCase):
 
 
 class ValidationTests(unittest.TestCase):
+    def test_daily_kpi_accepts_missing_fields(self):
+        self.assertEqual(render.kpi("X", None), ("X", "확인필요", "－", "fl"))
+        for unit in ("price", "bp"):
+            for fields in ({}, {"value": None, "chg": None, "pct": None}):
+                with self.subTest(unit=unit, fields=fields):
+                    self.assertEqual(render.kpi("X", {"unit": unit, **fields}),
+                                     ("X", "-", "-", "fl"))
+
+    def test_daily_kpi_preserves_numeric_changes(self):
+        for change, arrow, color in ((1.25, "▲", "up"), (-1.25, "▼", "dn"), (0, "－", "fl")):
+            for unit, key, value, delta in (
+                ("price", "pct", "1,234.50", f"{arrow} {abs(change):.2f}%"),
+                ("bp", "chg", "1234.500%", f"{arrow} {abs(change):.1f}bp"),
+            ):
+                with self.subTest(unit=unit, change=change):
+                    self.assertEqual(render.kpi("X", {"unit": unit, "value": 1234.5, key: change}),
+                                     ("X", value, delta, color))
+                    self.assertEqual(render.kpi("X", {"unit": unit, key: change}),
+                                     ("X", "-", delta, color))
+                    self.assertEqual(render.kpi("X", {"unit": unit, "value": 1234.5}),
+                                     ("X", value, "-", "fl"))
+
+    def test_daily_row_accepts_change_without_percent(self):
+        output = render.row({"label": "X", "value": 100, "chg": -2, "pct": None}, "")
+        self.assertIn('c3 dn', output)
+        self.assertIn("▼ 2.00", output)
+        self.assertNotIn("None", output)
+
     def test_md_date_handles_year_boundary(self):
         start, end = dt.date(2025, 12, 29), dt.date(2026, 1, 2)
         self.assertEqual(md_date_in_range("매체 · 1/2", start, end), dt.date(2026, 1, 2))
@@ -108,14 +136,21 @@ class RenderSmokeTests(unittest.TestCase):
             def fake_og(_html, png, *_args, **_kwargs):
                 Path(png).write_bytes(b"png")
 
-            render.make_og.build = fake_og
             argv = ["render.py", "--data", str(data_path), "--brief", str(brief_path),
                     "--template", str(root / "template.html"), "--out", str(out_path)]
-            with mock.patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()):
+            # Freeze the execution date independently of the older input fixture.
+            now = dt.datetime(2026, 9, 7, 7, tzinfo=render.KST)
+            with mock.patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()), \
+                    mock.patch.object(render.dt, "datetime") as clock, \
+                    mock.patch.object(render.make_og, "build", side_effect=fake_og, create=True) as og:
+                clock.now.return_value = now
                 render.main()
-            output = (out_path / "2026-09-03.html").read_text(encoding="utf-8")
+            output = (out_path / "2026-09-07.html").read_text(encoding="utf-8")
             self.assertNotIn("{{", output)
-            self.assertTrue((out_path / "report.json").exists())
+            self.assertTrue((out_path / "og-2026-09-07.png").exists())
+            report = json.loads((out_path / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["slug"], "2026-09-07")
+            self.assertIn(("S&P 500", "-", "-", "fl"), og.call_args.args[3])
 
     def test_weekly_main_renders_with_missing_optional_data(self):
         root = Path(__file__).resolve().parents[1]

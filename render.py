@@ -45,6 +45,20 @@ def num(v, nd=2):
     return "-" if v is None else f"{v:,.{nd}f}"
 
 
+def kpi(label, rec):
+    """Keep missing thumbnail values distinct from a genuine zero change."""
+    if not rec:
+        return (label, "확인필요", "－", "fl")
+    value = rec.get("value")
+    is_rate = rec.get("unit") == "bp"
+    change = rec.get("chg" if is_rate else "pct")
+    val = (f"{value:.3f}%" if is_rate else num(value)) if value is not None else "-"
+    delta = "-" if change is None else (
+        f"{arrow(change)} {abs(change):.1f}bp" if is_rate
+        else f"{arrow(change)} {abs(change):.2f}%")
+    return (label, val, delta, cls(change))
+
+
 UNRESOLVED = []          # 화면에 '확인필요'로 렌더된 항목 (최종 판정 기준)
 
 
@@ -75,6 +89,9 @@ def row(rec, sub, name=""):
             chg = "-"
         elif chg_v is None:
             chg = f'{arrow(pct_v)} {pct_v:+.2f}%'
+        elif pct_v is None:
+            chg = f'{arrow(chg_v)} {abs(chg_v):,.2f}'
+            c = cls(chg_v)
         else:
             chg = f'{arrow(pct_v)} {abs(chg_v):,.2f}<br>{pct_v:+.2f}%'
     label = rec.get("label") or name or "이름 미상"
@@ -157,8 +174,10 @@ def main():
     ap.add_argument("--out", default="out")
     args = ap.parse_args()
 
-    data = json.load(open(args.data, encoding="utf-8"))
-    brief = json.load(open(args.brief, encoding="utf-8"))
+    with open(args.data, encoding="utf-8") as fp:
+        data = json.load(fp)
+    with open(args.brief, encoding="utf-8") as fp:
+        brief = json.load(fp)
     S = data["series"]
     os.makedirs(args.out, exist_ok=True)
 
@@ -227,7 +246,8 @@ def main():
         foot += ('        ※ 자동 수집에 실패해 "확인필요"로 표기된 항목 '
                  f'{len(UNRESOLVED)}건: {", ".join(UNRESOLVED)}. 발송 전 직접 확인하세요.<br>\n')
 
-    tpl = open(args.template, encoding="utf-8").read()
+    with open(args.template, encoding="utf-8") as fp:
+        tpl = fp.read()
     out_html = (tpl
                 .replace("{{TITLE}}", html.escape(title))
                 .replace("{{OG_DESC}}", html.escape(str(brief.get("og_description", ""))))
@@ -245,22 +265,13 @@ def main():
                 .replace("{{NEXT}}", safe_html(brief.get("next_events")))
                 .replace("{{FOOTNOTE}}", foot))
     path = os.path.join(args.out, f"{slug}.html")
-    open(path, "w", encoding="utf-8").write(out_html)
+    with open(path, "w", encoding="utf-8") as fp:
+        fp.write(out_html)
     print(f"  · 대시보드 → {path}")
 
     # ── OG 썸네일 : 대시보드 실제 화면을 캡처해 합성 ──
     kpi_spec = [("코스피", "kospi"), ("S&P 500", "sp500"), ("국고채 3년", "ktb3y"), ("국제금", "gold")]
-    kpis = []
-    for label, key in kpi_spec:
-        rec = S.get(key)
-        if not rec:
-            kpis.append((label, "확인필요", "－", "fl"))
-        elif rec.get("unit") == "bp":
-            kpis.append((label, f'{rec["value"]:.3f}%',
-                         f'{arrow(rec["chg"])} {abs(rec["chg"]):.1f}bp', cls(rec["chg"])))
-        else:
-            kpis.append((label, num(rec["value"]),
-                         f'{arrow(rec["pct"])} {abs(rec["pct"]):.2f}%', cls(rec["pct"])))
+    kpis = [kpi(label, S.get(key)) for label, key in kpi_spec]
 
     png = os.path.join(args.out, f"og-{slug}.png")
     make_og.build(path, png, date_line, kpis, str(brief.get("oneline_market", "")), tmpdir=args.out)
