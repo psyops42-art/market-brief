@@ -17,6 +17,7 @@ with mock.patch.dict(sys.modules, {"yfinance": types.ModuleType("yfinance"),
                                   "requests": types.ModuleType("requests")}):
     import fetch_data
 from pipeline_utils import morning_cutoff, validate_daily_dates
+from market_dates import expected_close
 
 
 class MorningDateTests(unittest.TestCase):
@@ -38,15 +39,76 @@ class MorningDateTests(unittest.TestCase):
             rec = fetch_data._yahoo_once("^GSPC", "2026-09-04", "14d")
         self.assertEqual(rec, {"value": 102., "chg": 2., "pct": 2., "asof": "2026-09-04"})
         self.assertEqual(ticker.history.call_args.kwargs,
-                         {"start": "2026-08-22", "end": "2026-09-05", "interval": "1d"})
+                         {"start": "2026-08-22", "end": "2026-09-07", "interval": "1d"})
 
     def test_holiday_keeps_actual_observation_date_without_live_quote(self):
         old = {"value": 100., "asof": "2026-09-03", "chg": 1., "pct": 1.01}
         with mock.patch.object(fetch_data, "_yahoo_once", return_value=old), \
+                mock.patch.object(fetch_data, "_yahoo_range", return_value=None), \
+                mock.patch.object(fetch_data, "_closed_quote", return_value=None), \
                 mock.patch.object(fetch_data.yf, "Ticker", create=True) as ticker:
             rec = fetch_data.yahoo("^GSPC", "2026-09-04")
         self.assertEqual(rec, old)
         ticker.assert_not_called()
+
+    def test_labor_day_is_us_only(self):
+        for symbol in ("^GSPC", "^NDX", "^TNX", "^TYX"):
+            self.assertEqual(expected_close(symbol, "2026-09-07"), "2026-09-04")
+        for symbol in ("^KS11", "^KQ11", "000001.SS", "^STOXX50E", "ktb3y"):
+            self.assertEqual(expected_close(symbol, "2026-09-07"), "2026-09-07")
+        self.assertEqual(expected_close("^GSPC", "2026-09-08"), "2026-09-08")
+
+    def test_range_retry_recovers_monday_but_excludes_tuesday(self):
+        history = pd.DataFrame({"Close": [100., 102., 999.]},
+                               index=pd.to_datetime(["2026-09-04", "2026-09-07", "2026-09-08"]))
+        ticker = mock.Mock()
+        ticker.history.return_value = history
+        with mock.patch.object(fetch_data, "_yahoo_once", return_value={"asof": "2026-09-04"}), \
+                mock.patch.object(fetch_data.yf, "Ticker", return_value=ticker, create=True):
+            rec = fetch_data.yahoo("^KS11", "2026-09-07")
+        self.assertEqual((rec["asof"], rec["value"], rec["chg"]), ("2026-09-07", 102., 2.))
+        self.assertEqual(ticker.history.call_args.kwargs, {"period": "1mo", "interval": "1d"})
+
+    def test_us_holiday_does_not_retry_a_complete_friday_bar(self):
+        with mock.patch.object(fetch_data, "_yahoo_once", return_value={"asof": "2026-09-04"}), \
+                mock.patch.object(fetch_data, "_yahoo_range") as retry:
+            fetch_data.yahoo("^GSPC", "2026-09-07")
+        retry.assert_not_called()
+
+    def test_dated_quote_requires_matching_session_and_completed_close(self):
+        previous = {"value": 100., "asof": "2026-09-04"}
+        ticker = mock.Mock()
+        for timestamp, accepted in (("2026-09-07T15:40:00+09:00", True),
+                                    ("2026-09-07T14:00:00+09:00", False),
+                                    ("2026-09-08T15:40:00+09:00", False),
+                                    (None, False)):
+            ticker.get_history_metadata.return_value = {
+                "regularMarketTime": dt.datetime.fromisoformat(timestamp) if timestamp else None,
+                "exchangeTimezoneName": "Asia/Seoul", "regularMarketPrice": 102.,
+                "chartPreviousClose": 999.,
+            }
+            with self.subTest(timestamp=timestamp), \
+                    mock.patch.object(fetch_data.yf, "Ticker", return_value=ticker, create=True):
+                result = fetch_data._closed_quote("^KS11", "2026-09-07", previous)
+            self.assertEqual(result is not None, accepted)
+            if accepted:
+                self.assertEqual((result["asof"], result["value"], result["chg"]),
+                                 ("2026-09-07", 102., 2.))
+
+    def test_old_observation_is_stale_only_in_open_markets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "data.json"
+            with mock.patch.object(fetch_data, "yahoo", side_effect=lambda *a: {
+                    "asof": "2026-09-04", "value": 100., "chg": 1., "pct": 1.}), \
+                    mock.patch.object(fetch_data, "fred", return_value=None), \
+                    mock.patch.object(fetch_data, "ecos", return_value=None), \
+                    mock.patch.object(sys, "argv", ["fetch_data.py", "--date", "2026-09-08", "--out", str(path)]), \
+                    redirect_stdout(io.StringIO()):
+                fetch_data.main()
+            data = json.loads(path.read_text(encoding="utf-8"))
+            stale = {item["key"] for item in data["stale"]}
+            self.assertTrue({"kospi", "shcomp", "sx5e"} <= stale)
+            self.assertFalse({"sp500", "ndx", "ust10y", "ust30y"} & stale)
 
     def test_fred_enforces_cutoff_even_if_response_contains_newer_rows(self):
         response = mock.Mock()

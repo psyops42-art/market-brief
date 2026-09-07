@@ -164,8 +164,8 @@ class NewsFreshnessTests(unittest.TestCase):
 
     def test_timezone_conversion_and_year_boundary(self):
         for day, timestamp, display in (
-            (self.day, "2026-09-06T17:00:00-04:00", "9/6"),
-            (dt.date(2027, 1, 1), "2026-12-31T17:00:00-05:00", "12/31"),
+            (self.day, "2026-09-06T17:00:00-04:00", "9/7"),
+            (dt.date(2027, 1, 1), "2026-12-31T17:00:00-05:00", "1/1"),
         ):
             brief = self.fresh_brief()
             for item in brief["headlines"] + [brief["checkpoint"]]:
@@ -214,6 +214,7 @@ class NewsFreshnessTests(unittest.TestCase):
             with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test"}), \
                     mock.patch.object(sys, "argv", ["make_brief.py", "--data", str(data), "--out", str(out)]), \
                     mock.patch.object(make_brief, "call_api", return_value=json.dumps(self.fresh_brief())) as call, \
+                    mock.patch.object(make_brief, "fetch_news_sources", return_value={}), \
                     redirect_stdout(io.StringIO()):
                 make_brief.main()  # No actual search evidence: both attempts must fail.
             self.assertEqual(call.call_count, 2)
@@ -253,7 +254,7 @@ class NewsFreshnessTests(unittest.TestCase):
         self.assertEqual(result["headlines"][0]["sources"], [])
         self.assertEqual(result["checkpoint"]["sources"], [])
 
-    def test_display_mismatch_is_excluded_without_relabeling(self):
+    def test_display_is_derived_from_original_publication_without_relabeling(self):
         bad = self.fresh_brief()
         bad["checkpoint"]["source"] = "매체 · 8/27"
         def api(prompt, key, source_urls):
@@ -262,7 +263,40 @@ class NewsFreshnessTests(unittest.TestCase):
         with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
             result = make_brief.generate_fresh_brief("원래 조건", "test", self.day)
         self.assertEqual(result["headlines"], bad["headlines"])
-        self.assertEqual(result["checkpoint"]["sources"], [])
+        self.assertEqual(result["checkpoint"]["sources"], bad["checkpoint"]["sources"])
+        self.assertEqual(result["checkpoint"]["source"], "매체 · 9/7")
+
+    def test_september_eighth_morning_news_through_run_time(self):
+        day = dt.date(2026, 9, 8)
+        asof = dt.datetime(2026, 9, 8, 8, 30, tzinfo=make_brief.KST)
+        brief = self.fresh_brief()
+        for item in brief["headlines"] + [brief["checkpoint"]]:
+            item["sources"][0]["published_at"] = "2026-09-08T08:15:00+09:00"
+        make_brief.format_sources(brief)
+        self.assertEqual(make_brief.news_issues(brief, day, self.urls(), asof), [])
+        brief["checkpoint"]["sources"][0]["published_at"] = "2026-09-08T08:31:00+09:00"
+        self.assertTrue(make_brief.news_issues(brief, day, self.urls(), asof))
+
+    def test_rss_timestamp_overrides_model_copy_but_not_original_evidence(self):
+        brief = self.fresh_brief()
+        evidence = {s["url"]: s.copy() for item in brief["headlines"] + [brief["checkpoint"]]
+                    for s in item["sources"]}
+        for item in brief["headlines"] + [brief["checkpoint"]]:
+            item["sources"][0]["published_at"] = "2026-08-27T06:00:00+09:00"
+        with mock.patch.object(make_brief, "call_api", return_value=json.dumps(brief)) as api:
+            result = make_brief.generate_fresh_brief("test", "key", self.day, evidence=evidence)
+        self.assertEqual(api.call_count, 1)
+        self.assertEqual(result["checkpoint"]["source"], "매체 · 9/7")
+
+    def test_rss_rejects_old_future_and_undated_articles(self):
+        from news_sources import parse_feed
+        xml = '<rss><channel>' + ''.join(
+            f'<item><title>기사</title><link>https://example.test/{i}</link><pubDate>{stamp}</pubDate></item>'
+            for i, stamp in enumerate(['Mon, 07 Sep 2026 06:00:00 +0900',
+                                      'Thu, 27 Aug 2026 06:00:00 +0900',
+                                      'Tue, 08 Sep 2026 06:00:00 +0900', ''])) + '</channel></rss>'
+        candidates = parse_feed(xml, "매체", *make_brief.news_window(self.day))
+        self.assertEqual([x['url'] for x in candidates], ['https://example.test/0'])
 
 
 class RenderSmokeTests(unittest.TestCase):

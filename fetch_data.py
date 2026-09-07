@@ -22,9 +22,12 @@ import datetime as dt
 import json
 import os
 import sys
+import math
+from zoneinfo import ZoneInfo
 
 import requests
 from pipeline_utils import atomic_write_json, morning_cutoff, validate_daily_dates
+from market_dates import expected_close, session_close, CALENDARS
 
 try:
     import yfinance as yf
@@ -47,8 +50,6 @@ TICKERS = {
     "btc":    ("BTC-USD",   "비트코인 (BTC/USD)",     "cr", 2),
 }
 # 수익률로 표시할 야후 티커 (등락을 bp 로 환산)
-LAG_TOLERANCE = {"kospi": 1, "kosdaq": 1, "shcomp": 1, "sx5e": 1, "dax": 1}
-
 RATE_TICKERS = {
     "ust10y": ("^TNX", "미국채 10년", "DGS10"),
     "ust30y": ("^TYX", "미국채 30년", "DGS30"),
@@ -69,7 +70,10 @@ def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
         if cutoff:
             end = dt.date.fromisoformat(cutoff) + dt.timedelta(days=1)
             start = end - dt.timedelta(days=14 if period == "14d" else 31)
-            hist = yf.Ticker(symbol).history(start=start.isoformat(), end=end.isoformat(), interval="1d")
+            # Fetch past the boundary, then filter locally. Some provider daily
+            # responses omit the last completed bar at an exact end boundary.
+            hist = yf.Ticker(symbol).history(start=start.isoformat(),
+                                            end=(end + dt.timedelta(days=2)).isoformat(), interval="1d")
         else:
             hist = yf.Ticker(symbol).history(period=period, interval="1d")
         hist = hist.dropna(subset=["Close"])
@@ -89,15 +93,75 @@ def _yahoo_once(symbol: str, cutoff: str, period: str) -> dict | None:
 
 def yahoo(symbol: str, cutoff: str = None) -> dict | None:
     """날짜가 있는 일별 종가만 사용한다. 실시간 시세를 과거 종가로 대체하지 않는다."""
+    cutoff = expected_close(symbol, cutoff) if cutoff else None
     rec = _yahoo_once(symbol, cutoff, "14d")
 
-    if rec and cutoff and rec["asof"] < cutoff:
-        retry = _yahoo_once(symbol, cutoff, "1mo")
-        if retry and retry["asof"] > rec["asof"]:
-            print(f"    (재조회로 {rec['asof']} → {retry['asof']} 갱신)")
+    if cutoff and (not rec or rec["asof"] < expected_close(symbol, cutoff)):
+        # Use a range query to bypass the historical-end query/cache path.
+        retry = _yahoo_range(symbol, cutoff)
+        if retry and (not rec or retry["asof"] > rec["asof"]):
+            print(f"    (재조회로 {rec['asof'] if rec else '없음'} → {retry['asof']} 갱신)")
             rec = retry
 
+    if cutoff and rec and rec["asof"] < cutoff:
+        quote = _closed_quote(symbol, cutoff, rec)
+        if quote:
+            print(f"    (마감시각 확인 시세로 {rec['asof']} → {quote['asof']} 보완)")
+            rec = quote
+
     return rec
+
+
+def _closed_quote(symbol: str, cutoff: str, previous: dict) -> dict | None:
+    """Use a dated post-close quote only when yesterday's close is known.
+
+    Never use fast_info or chartPreviousClose (the latter may be the first
+    value in the chart range rather than the previous session).
+    """
+    if symbol not in CALENDARS:
+        return None
+    prior = dt.date.fromisoformat(cutoff) - dt.timedelta(days=1)
+    if previous["asof"] != expected_close(symbol, prior.isoformat()):
+        return None
+    try:
+        meta = yf.Ticker(symbol).get_history_metadata()
+        stamp = meta.get("regularMarketTime")
+        if isinstance(stamp, (int, float)):
+            stamp = dt.datetime.fromtimestamp(stamp, dt.timezone.utc)
+        if not isinstance(stamp, dt.datetime) or stamp.utcoffset() is None:
+            return None
+        local = stamp.astimezone(ZoneInfo(meta["exchangeTimezoneName"]))
+        close = session_close(symbol, cutoff)
+        if local.date().isoformat() != cutoff or close is None or stamp < close:
+            return None
+        if stamp > dt.datetime.now(dt.timezone.utc):
+            return None
+        value, prev = float(meta["regularMarketPrice"]), float(previous["value"])
+        if not math.isfinite(value) or not math.isfinite(prev) or prev <= 0:
+            return None
+        return {"value": round(value, 2), "chg": round(value - prev, 2),
+                "pct": round((value / prev - 1) * 100, 2), "asof": cutoff,
+                "src": "Yahoo timestamped close", "quote_at": stamp.isoformat()}
+    except Exception as exc:
+        print(f"  ! {symbol} 마감시세 확인 실패: {exc}")
+        return None
+
+
+def _yahoo_range(symbol: str, cutoff: str) -> dict | None:
+    """Independent range query; retain only genuinely dated completed bars."""
+    try:
+        hist = yf.Ticker(symbol).history(period="1mo", interval="1d")
+        hist = hist.dropna(subset=["Close"])
+        hist = hist[hist.index.strftime("%Y-%m-%d") <= cutoff].sort_index()
+        if len(hist) < 2:
+            return None
+        last, prev = float(hist.Close.iloc[-1]), float(hist.Close.iloc[-2])
+        return {"value": round(last, 2), "chg": round(last - prev, 2),
+                "pct": round((last / prev - 1) * 100, 2),
+                "asof": hist.index[-1].strftime("%Y-%m-%d")}
+    except Exception as exc:
+        print(f"  ! {symbol} 범위 재조회 실패: {exc}")
+        return None
 
 
 def fred(series: str, cutoff: str = None) -> dict | None:
@@ -260,7 +324,7 @@ def main():
         if rec:
             rec.update(unit="bp", chg=round(rec["chg"] * 100, 1), pct=None, symbol=sym, src="Yahoo")
         # 야후가 비었거나 기준일보다 오래되면 FRED 공식치로 대체
-        if cutoff and (not rec or rec["asof"] < cutoff):
+        if cutoff and (not rec or rec["asof"] < expected_close(sym, cutoff)):
             alt = fred(series, cutoff)
             if alt and (not rec or alt["asof"] > rec["asof"]):
                 print(f"    ({label}: Yahoo {rec['asof'] if rec else '없음'} → FRED {alt['asof']} 대체)")
@@ -285,15 +349,12 @@ def main():
             out["missing"].append(key)
 
     # ── 최신성 검증 ──
-    # 미국 장은 한국시간 새벽에 마감해 기준일(cutoff)이 항상 가장 빠르게 잡힌다.
-    # 반면 Yahoo Finance는 코스피·상해종합·유로스톡스 같은 비(非)미국 지수를
-    # 통상 하루 늦게 반영하는 고질적 지연이 있다 — 실제 시장이 늦게 닫힌 게
-    # 아니라 데이터 제공사의 반영 속도 문제다. 이를 감안하지 않으면 이 지수들은
-    # '매일' 거짓 경고가 뜬다. 그래서 지수별로 허용 지연일을 따로 둔다.
+    # Common cutoff is only an upper bound. Compare observations against each
+    # market's last session; a foreign holiday does not excuse a stale KRX bar.
     print("[검증] 기준일 대비 최신성")
     out["cutoff"] = cutoff
     out["stale"] = []      # 실제 조치가 필요한 항목
-    out["delayed"] = []    # Yahoo 반영 지연으로 알려진, 정상 범위의 지연
+    out["delayed"] = []    # Retained for compatibility with renderer/report schema.
 
     if cutoff:
         cut = dt.date.fromisoformat(cutoff)
@@ -301,14 +362,14 @@ def main():
         if (today - cut).days > 4:
             print(f"  ! 기준일이 오늘({today})보다 {(today - cut).days}일 이전입니다 — 연휴이거나 수집 지연입니다")
         for key, r in out["series"].items():
-            if not r.get("label") or r["asof"] >= cutoff:
+            expected = expected_close(r.get("symbol", EXTRA.get(key, key)), cutoff)
+            r["expected_asof"] = expected
+            if not r.get("label") or r["asof"] >= expected:
                 continue
-            gap = (cut - dt.date.fromisoformat(r["asof"])).days
-            entry = {"key": key, "label": r["label"], "asof": r["asof"], "gap": gap}
-            if gap <= LAG_TOLERANCE.get(key, 0):
-                out["delayed"].append(entry)
-            else:
-                out["stale"].append(entry)
+            gap = (dt.date.fromisoformat(expected) - dt.date.fromisoformat(r["asof"])).days
+            entry = {"key": key, "label": r["label"], "asof": r["asof"], "gap": gap,
+                     "expected_asof": expected}
+            out["stale"].append(entry)
 
         if out["delayed"]:
             names = ", ".join(f"{x['label']}({x['gap']}일)" for x in out["delayed"])

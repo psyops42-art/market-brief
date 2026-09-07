@@ -202,7 +202,7 @@ def main():
             return ""
         out = f'{fmt_date(r["asof"])} 종가'
         if key in STALE:
-            out += f' · ⚠ 최신 아님(기준일 {fmt_date(cutoff)})'
+            out += f' · ⚠ 최신 아님(기대 종가 {fmt_date(r.get("expected_asof", cutoff))})'
         elif key in DELAYED:
             out += ' · 해외지수 특성상 1일 지연'
         if extra:
