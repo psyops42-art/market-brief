@@ -21,6 +21,26 @@ from market_dates import expected_close
 
 
 class MorningDateTests(unittest.TestCase):
+    def test_ecos_connection_failure_is_bounded_and_key_not_logged(self):
+        with mock.patch.object(fetch_data, "_ecos_unavailable", False), \
+                mock.patch.object(fetch_data.requests, "get", side_effect=TimeoutError("SECRET"), create=True) as get:
+            self.assertIsNone(fetch_data._ecos_get("https://ecos.bok.or.kr/api/SECRET")[0])
+            _, error = fetch_data._ecos_get("https://ecos.bok.or.kr/api/SECRET")
+            self.assertEqual(get.call_count, 2)
+            self.assertNotIn("SECRET", error)
+
+    def test_korean_bond_fallback_uses_only_dated_past_rows(self):
+        response = mock.Mock()
+        response.json.return_value = [
+            {"localTradedAt": "2026-09-09T10:00:00+09:00", "closePrice": "99.0"},
+            {"localTradedAt": "2026-09-08T16:00:00+09:00", "closePrice": "4.390"},
+            {"localTradedAt": "2026-09-07T16:00:00+09:00", "closePrice": "4.381"}]
+        with mock.patch.object(fetch_data, "ecos", return_value=None), \
+                mock.patch.object(fetch_data.requests, "get", return_value=response, create=True):
+            result = fetch_data.korean_bond("ktb10y", "2026-09-08")
+        self.assertEqual((result["value"], result["chg"], result["asof"]), (4.39, 0.9, "2026-09-08"))
+        self.assertIn("Reuters", result["src"])
+
     def test_previous_weekday_including_weekend_and_year_boundary(self):
         for day, expected in (("2026-09-07", "2026-09-04"),
                               ("2026-09-08", "2026-09-07"),

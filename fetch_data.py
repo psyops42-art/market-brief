@@ -2,7 +2,7 @@
 """
 1단계 · 시장지표 14종 수집  →  data.json
 
-공식·무료 API만 사용합니다. 스크래핑 없음.
+공개 JSON API와 Yahoo 일별 시세를 사용합니다.
   · 글로벌(주식·환율·원자재) : yfinance (Yahoo Finance)
   · 미국 국채 10년/30년       : Yahoo Finance ^TNX / ^TYX
                                 실패하거나 값이 오래되면 FRED(DGS10/DGS30)로 대체
@@ -202,16 +202,28 @@ ECOS_ITEMS = {"ktb3y": ("국고채(3년)", "010200000"),
               "ktb10y": ("국고채(10년)", "010210000")}
 _ecos_combo = None          # 성공한 (stat, cycle)
 _ecos_items = {}            # 자동 탐색으로 찾은 항목코드
+_ecos_unavailable = False   # Stop repeating requests to an unreachable host.
 
 
 def _ecos_get(url):
     """(rows, 에러메시지) 반환"""
+    global _ecos_unavailable
+    if _ecos_unavailable:
+        return None, "ECOS 연결 재시도 소진"
+    for attempt in range(2):
+        try:
+            r = requests.get(url, timeout=(3, 8))
+            r.raise_for_status()
+            break
+        except Exception as exc:
+            if attempt == 1:
+                _ecos_unavailable = True
+                # Exception URLs contain the API key; never print them.
+                return None, f"ECOS 연결 실패 ({type(exc).__name__})"
     try:
-        r = requests.get(url, timeout=20)
-        r.raise_for_status()
         j = r.json()
-    except Exception as exc:                                    # noqa: BLE001
-        return None, f"요청 실패: {exc}"
+    except ValueError:
+        return None, "ECOS 응답 JSON 형식 오류"
     if "RESULT" in j:                                           # ECOS 오류 응답
         return None, f'{j["RESULT"].get("CODE")} {j["RESULT"].get("MESSAGE")}'
     for root in ("StatisticSearch", "StatisticItemList"):
@@ -247,13 +259,17 @@ def ecos(key_name: str, cutoff: str = None) -> dict | None:
     target = dt.date.fromisoformat(cutoff) if cutoff else dt.datetime.now(KST).date()
     end = target.strftime("%Y%m%d")
     start = (target - dt.timedelta(days=30)).strftime("%Y%m%d")
-    combos = [_ecos_combo] if _ecos_combo else ECOS_CANDIDATES
+    combos = ([_ecos_combo] + [x for x in ECOS_CANDIDATES if x != _ecos_combo]
+              if _ecos_combo else ECOS_CANDIDATES)
 
     for stat, cycle in combos:
         item = _ecos_items.get(key_name) or ECOS_ITEMS[key_name][1]
         url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/200/"
                f"{stat}/{cycle}/{start}/{end}/{item}")
         rows, err = _ecos_get(url)
+        if _ecos_unavailable:
+            print(f"  ! {err} — 날짜가 있는 대체 시세를 조회합니다")
+            return None
 
         # 항목코드가 틀렸을 수 있으니 이름으로 한 번 더 탐색
         if not rows and key_name not in _ecos_items:
@@ -285,6 +301,38 @@ def ecos(key_name: str, cutoff: str = None) -> dict | None:
 
     print(f"  ! ECOS {ECOS_ITEMS[key_name][0]} 조회 실패 — 모든 조합에서 데이터 없음")
     return None
+
+
+def korean_bond(key_name, cutoff):
+    """ECOS official series first; dated Reuters market yields as fallback."""
+    rec = ecos(key_name, cutoff)
+    if rec:
+        rec["src"] = "한국은행 ECOS"
+        return rec
+    symbol = {"ktb3y": "KR3YT=RR", "ktb10y": "KR10YT=RR"}[key_name]
+    url = f"https://api.stock.naver.com/marketindex/bond/{symbol}/prices"
+    try:
+        response = requests.get(url, timeout=(3, 8))
+        response.raise_for_status()
+        records = {}
+        for row in response.json():
+            timestamp = dt.datetime.fromisoformat(row["localTradedAt"])
+            if timestamp.utcoffset() is None:
+                continue
+            day = timestamp.astimezone(KST).date().isoformat()
+            value = float(row["closePrice"].replace(",", ""))
+            if day <= cutoff and math.isfinite(value):
+                records[day] = value
+        days = sorted(records)
+        if len(days) < 2:
+            return None
+        last, prev = records[days[-1]], records[days[-2]]
+        return {"value": round(last, 3), "chg": round((last - prev) * 100, 1),
+                "pct": None, "asof": days[-1], "unit": "bp",
+                "src": "Npay·Reuters 시장수익률", "source_url": url}
+    except Exception as exc:
+        print(f"  ! {key_name} 대체 시세 실패: {type(exc).__name__}")
+        return None
 
 
 def main():
@@ -338,9 +386,9 @@ def main():
         else:
             out["missing"].append(key)
 
-    print("[3/3] 한국은행 ECOS · 국고채")
+    print("[3/3] 국고채 (한국은행 ECOS → Npay·Reuters 대체)")
     for key in ("ktb3y", "ktb10y"):
-        rec = ecos(key, cutoff)
+        rec = korean_bond(key, cutoff)
         if rec:
             rec.update(label={"ktb3y": "국고채 3년", "ktb10y": "국고채 10년"}[key], badge="kr")
             out["series"][key] = rec

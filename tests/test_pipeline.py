@@ -138,7 +138,7 @@ class NewsFreshnessTests(unittest.TestCase):
     def test_news_window_is_independent_of_friday_close(self):
         self.assertEqual(make_brief.validate(self.fresh_brief(), "2026-09-04", self.day), [])
         start, end = make_brief.news_window(self.day)
-        self.assertEqual(start.isoformat(), "2026-09-05T07:00:00+09:00")
+        self.assertEqual(start.isoformat(), "2026-09-04T07:00:00+09:00")
         self.assertEqual(end.isoformat(), "2026-09-07T07:00:00+09:00")
 
     def test_old_checkpoint_is_rejected_even_with_a_recent_secondary_source(self):
@@ -155,7 +155,7 @@ class NewsFreshnessTests(unittest.TestCase):
                 self.assertTrue(any("국내 체크포인트" in x and "기간" in x for x in issues))
 
     def test_stale_future_and_missing_timezone_are_rejected(self):
-        for timestamp in ("2026-09-04T23:00:00+09:00", "2026-09-07T07:00:01+09:00",
+        for timestamp in ("2026-09-04T06:59:59+09:00", "2026-09-07T07:00:01+09:00",
                           "2026-09-07", "2026-09-07T06:00:00", None):
             brief = self.fresh_brief()
             brief["headlines"][0]["sources"][0]["published_at"] = timestamp
@@ -216,22 +216,22 @@ class NewsFreshnessTests(unittest.TestCase):
                     mock.patch.object(make_brief, "call_api", return_value=json.dumps(self.fresh_brief())) as call, \
                     mock.patch.object(make_brief, "fetch_news_sources", return_value={}), \
                     redirect_stdout(io.StringIO()):
-                make_brief.main()  # No actual search evidence: both attempts must fail.
-            self.assertEqual(call.call_count, 2)
+                make_brief.main()  # No evidence: omit unsupported claims after retries.
+            self.assertEqual(call.call_count, 3)
             result = json.loads(out.read_text(encoding="utf-8"))
             self.assertEqual(result["_news_status"], "partial")
             self.assertTrue(result["_issues"])
             html = render.build_news(result)
-            self.assertIn("최신 보도 미확보", html)
+            self.assertNotIn("미확보", html)
             self.assertNotIn("최신 기사에 근거한 설명", html)
-            self.assertEqual(len(result["headlines"]), 3)
+            self.assertEqual(len(result["headlines"]), 0)
             rendered = Path(temp) / "out"
             template = Path(__file__).resolve().parents[1] / "template.html"
             with mock.patch.object(sys, "argv", ["render.py", "--data", str(data), "--brief", str(out),
                                                 "--template", str(template), "--out", str(rendered)]), \
                     mock.patch.object(render.make_og, "build", create=True), redirect_stdout(io.StringIO()):
                 render.main()
-            self.assertIn("최신 보도 미확보", (rendered / "2026-09-07.html").read_text(encoding="utf-8"))
+            self.assertNotIn("뉴스 확인 제한", (rendered / "2026-09-07.html").read_text(encoding="utf-8"))
             report = json.loads((rendered / "report.json").read_text(encoding="utf-8"))
             self.assertTrue(report["brief_issues"])
 
@@ -249,10 +249,27 @@ class NewsFreshnessTests(unittest.TestCase):
             return json.dumps(bad)
         with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
             result = make_brief.generate_fresh_brief("원래 조건", "test", self.day)
-        self.assertEqual(result["headlines"][1:], bad["headlines"][1:])
+        self.assertEqual(result["headlines"], bad["headlines"][1:])
         self.assertNotIn("오래된 국채 매입 뉴스", json.dumps(result, ensure_ascii=False))
-        self.assertEqual(result["headlines"][0]["sources"], [])
         self.assertEqual(result["checkpoint"]["sources"], [])
+
+    def test_verified_feed_fills_failed_slots_without_failure_copy(self):
+        bad = self.fresh_brief()
+        for card in bad["headlines"] + [bad["checkpoint"]]:
+            card["sources"][0]["published_at"] = "2026-08-01T00:00:00+09:00"
+        evidence = {f"https://example.test/rss/{i}": {
+            "url": f"https://example.test/rss/{i}", "title": f"경제 시장 보도 {i}",
+            "summary": "언론사가 제공한 기사 요약", "name": "매체",
+            "published_at": "2026-09-04T08:00:00+09:00"} for i in range(4)}
+        with mock.patch.object(make_brief, "call_api", return_value=json.dumps(bad)) as api, \
+                redirect_stdout(io.StringIO()):
+            result = make_brief.generate_fresh_brief("test", "key", self.day, evidence=evidence)
+        self.assertEqual(api.call_count, 3)
+        self.assertEqual(make_brief.news_issues(result, self.day, set(evidence)), [])
+        self.assertEqual(len(result["headlines"]), 3)
+        shown = json.dumps({k: v for k, v in result.items() if not k.startswith("_")}, ensure_ascii=False)
+        self.assertNotIn("미확보", shown)
+        self.assertNotIn("제한", shown)
 
     def test_display_is_derived_from_original_publication_without_relabeling(self):
         bad = self.fresh_brief()

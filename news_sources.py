@@ -4,6 +4,8 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit
+import html
+import re
 import requests
 
 FEEDS = (
@@ -23,7 +25,8 @@ def parse_feed(xml, name, start, end):
             if (published.utcoffset() is None or not start <= published <= end
                     or urlsplit(url).scheme != "https" or not title):
                 continue
-            items.append({"name": name, "url": url, "title": title,
+            summary = html.unescape(re.sub(r"<[^>]*>", "", node.findtext("description", ""))).strip()
+            items.append({"name": name, "url": url, "title": title, "summary": summary[:500],
                           "published_at": published.isoformat()})
         except (TypeError, ValueError):
             continue
@@ -44,5 +47,5 @@ def fetch_news_sources(start, end):
         groups = list(pool.map(fetch, FEEDS))
     # Bound prompt size while keeping each publisher represented.
     candidates = [item for group in groups for item in sorted(
-        group, key=lambda x: datetime.fromisoformat(x["published_at"]), reverse=True)[:12]]
+        group, key=lambda x: datetime.fromisoformat(x["published_at"]), reverse=True)[:20]]
     return {item["url"]: item for item in candidates}

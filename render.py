@@ -207,6 +207,8 @@ def main():
             out += ' · 해외지수 특성상 1일 지연'
         if extra:
             out += f' · {extra}'
+        if key in ("ktb3y", "ktb10y") and r.get("src"):
+            out += f' · {r["src"]}'
         return out
 
     kosdaq = S.get("kosdaq")
