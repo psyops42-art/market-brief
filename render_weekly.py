@@ -174,17 +174,17 @@ def build_mvp(series):
     # (금리 상승 = 채권가격 하락이라 방향 해석도 반대) 가격형 자산만 비교 대상으로 삼는다.
     priced = [r for r in series.values() if r.get("wow_pct") is not None and r.get("unit") == "price"]
     if not priced:
-        return ('      <div class="mvp"><div class="c best"><div class="lb">이번 주 최고</div>'
+        return ('      <div class="mvp"><div class="c best"><div class="lb">주간 최고</div>'
                 '<div class="nm2">확인필요</div><div class="vv">－</div></div>'
-                '<div class="c worst"><div class="lb">이번 주 최저</div>'
+                '<div class="c worst"><div class="lb">주간 최저</div>'
                 '<div class="nm2">확인필요</div><div class="vv">－</div></div></div>')
     best = max(priced, key=lambda r: r["wow_pct"])
     worst = min(priced, key=lambda r: r["wow_pct"])
     return ('      <div class="mvp">\n'
-            '        <div class="c best"><div class="lb">이번 주 최고</div>'
+            '        <div class="c best"><div class="lb">주간 최고</div>'
             f'<div class="nm2">{html.escape(best["label"])}</div>'
             f'<div class="vv">{pct_txt(best["wow_pct"]) if best["unit"]=="price" else bp_txt(best["wow_pct"])}</div></div>\n'
-            '        <div class="c worst"><div class="lb">이번 주 최저</div>'
+            '        <div class="c worst"><div class="lb">주간 최저</div>'
             f'<div class="nm2">{html.escape(worst["label"])}</div>'
             f'<div class="vv">{pct_txt(worst["wow_pct"]) if worst["unit"]=="price" else bp_txt(worst["wow_pct"])}</div></div>\n'
             '      </div>')
@@ -236,8 +236,6 @@ def main():
                  f'{tm.month}월 {tm.day}일({WD_KR[tm.weekday()]}) 아침')
     prev_fri = lm - dt.timedelta(days=3)
     asof_equity = f'{prev_fri.month}/{prev_fri.day} 종가 → {lf.month}/{lf.day} 종가 기준 · YTD는 연초 대비'
-    asof_rates = f'{prev_fri.month}/{prev_fri.day} 대비 · bp(basis point)'
-    asof_fx = f'{prev_fri.month}/{prev_fri.day} 대비'
     title = f'주간 마켓 브리핑 | {lm.month}월 {lm.day}일~{lf.day}일 정리'
 
     stale_set = {x["key"] for x in data.get("stale", [])}
@@ -308,8 +306,6 @@ def main():
                 .replace("{{EDU_BODY}}", safe_html(edu.get("body")))
                 .replace("{{QUOTES}}", quotes_html)
                 .replace("{{ASOF_EQUITY}}", asof_equity)
-                .replace("{{ASOF_RATES}}", asof_rates)
-                .replace("{{ASOF_FX}}", asof_fx)
                 .replace("{{TBL_EQUITY}}", equity)
                 .replace("{{TBL_RATES}}", rates)
                 .replace("{{TBL_FX}}", fx)
