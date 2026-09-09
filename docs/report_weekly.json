@@ -8,19 +8,20 @@
     "mon": "2026-09-07",
     "fri": "2026-09-11"
   },
-  "unresolved": [
-    "국고채 3년",
-    "국고채 10년"
-  ],
+  "unresolved": [],
   "stale": [],
   "delayed": [],
-  "brief_issues": [],
+  "brief_issues": [
+    "헤드라인 2 날짜(9/8)가 지난주 범위(2026-08-31~2026-09-04) 밖"
+  ],
   "og_ok": true,
   "og_error": "",
   "collected": [
     "btc",
     "gold",
     "kospi",
+    "ktb10y",
+    "ktb3y",
     "ndx",
     "shcomp",
     "sp500",
