@@ -253,26 +253,36 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
       <div class="sec"><div class="ck">✓</div><h2>주간 시장지표</h2></div>
 
       <div class="sec2"><div class="ck">✓</div><span>국내외 주식시장</span></div>
-      <div class="asof">{{ASOF_EQUITY}}</div>
+      <div class="tbl">
+        <div class="th"><div class="c1">지수</div><div class="c2">지수값</div><div class="c3">주간</div><div class="c4">YTD</div></div>
 {{TBL_EQUITY}}
+      </div>
 
       <div class="sec2"><div class="ck">✓</div><span>국내외 채권 금리</span></div>
-      <div class="asof">{{ASOF_RATES}}</div>
+      <div class="tbl">
+        <div class="th"><div class="c1">종목</div><div class="c2">금리</div><div class="c3">주간</div><div class="c4">YTD</div></div>
 {{TBL_RATES}}
+      </div>
 
       <div class="sec2"><div class="ck">✓</div><span>원자재 / 환율</span></div>
-      <div class="asof">{{ASOF_FX}}</div>
+      <div class="tbl">
+        <div class="th"><div class="c1">지표</div><div class="c2">가격</div><div class="c3">주간</div><div class="c4">YTD</div></div>
 {{TBL_FX}}
+      </div>
+
+      <div class="asof">{{ASOF_EQUITY}}</div>
 
       <div class="srcbox">
-        <div class="qh">시세 직접 조회</div>
+        <div class="qh">마켓 직접 조회</div>
         <div class="lk">
           <a href="https://m.stock.naver.com/domestic" target="_blank" rel="noopener">네이버 국내증시</a>
           <a href="https://m.stock.naver.com/worldstock" target="_blank" rel="noopener">네이버 해외증시</a>
           <a href="https://m.stock.naver.com/marketindex" target="_blank" rel="noopener">네이버 시장지표</a>
           <a class="ef" href="https://m.funetf.co.kr/" target="_blank" rel="noopener">ETF 조회</a>
+          <a href="https://finviz.com/map" target="_blank" rel="noopener">마켓맵 조회</a>
+          <a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener">심리지수 조회</a>
         </div>
-        <div class="memo">모바일 네이버페이증권으로 연결됩니다. 환율·유가·금·국고채는 시장지표에서, 상해종합·유로스톡스50은 해외증시에서 확인하세요. ETF 수익률·순자산은 FunETF에서 조회합니다.</div>
+        <div class="memo">모바일 네이버페이증권으로 연결됩니다. 환율·유가·금·국고채는 시장지표에서, 상해종합·유로스톡스50은 해외증시에서 확인하세요. ETF 수익률·순자산은 FunETF에서 조회합니다. 마켓맵은 Finviz S&amp;P 500 히트맵, 심리지수는 CNN 공포·탐욕 지수입니다.</div>
       </div>
 
       <div class="note">
