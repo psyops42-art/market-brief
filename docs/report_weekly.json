@@ -8,7 +8,10 @@
     "mon": "2026-09-07",
     "fri": "2026-09-11"
   },
-  "unresolved": [],
+  "unresolved": [
+    "국고채 3년",
+    "국고채 10년"
+  ],
   "stale": [],
   "delayed": [],
   "brief_issues": [],
@@ -18,8 +21,6 @@
     "btc",
     "gold",
     "kospi",
-    "ktb10y",
-    "ktb3y",
     "ndx",
     "shcomp",
     "sp500",
