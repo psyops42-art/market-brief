@@ -4,8 +4,8 @@
 
 daily 파이프라인(fetch_data.py)의 함수를 그대로 재사용합니다.
     · Yahoo 일별 시계열                — 주간/YTD/4주 흐름 계산
-    · fred() / ecos()                    — 미국채 3년/10년, 국고채 (일별 최신값)
-    · LAG_TOLERANCE                      — 비미국 지수의 정상 지연 허용치
+    · ECOS / Npay·Reuters                — 국고채 과거 이력과 대체 수집
+    · expected_close                     — 시장별 휴장일을 반영한 기대 관측일
 이 파일과 fetch_data.py를 같은 폴더에 두고 실행하세요.
 
 무엇을 계산하는가
@@ -15,8 +15,7 @@ daily 파이프라인(fetch_data.py)의 함수를 그대로 재사용합니다.
 
 최신성 검증 (반드시 확인)
     · '지난주 금요일' 종가가 실제로 그 날짜의 데이터인지 확인합니다.
-    · 기대 날짜보다 오래됐으면: 국가별 정상 지연 허용치(LAG_TOLERANCE) 이내면
-      'delayed'(정보성), 초과하면 'stale'(확인 필요)로 분류합니다.
+    · 시장별 직전 거래일보다 오래됐으면 'stale'(확인 필요)로 분류합니다.
     · 이 로직은 daily와 동일한 기준을 공유합니다 — 매일 검증하던 방식을
       '지난주 금요일'이라는 목표 날짜에 그대로 적용하는 것뿐입니다.
 
@@ -30,6 +29,7 @@ import datetime as dt
 import json
 import os
 import sys
+import math
 
 from pipeline_utils import atomic_write_json
 
@@ -142,13 +142,13 @@ def trend_arrows(hist, last_fri: dt.date, weeks: int = 4):
 
 
 def classify_freshness(asof: dt.date, expected: dt.date, key: str):
-    """daily와 동일한 기준(LAG_TOLERANCE)으로 'ok' / 'delayed' / 'stale' 판정"""
+    """daily와 동일한 시장 캘린더로 'ok' / 'stale' 판정."""
+    symbols = {row[0]: row[1] for row in EQUITY + FX_CM + YAHOO_RATES}
+    expected = dt.date.fromisoformat(D.expected_close(symbols.get(key, key), expected.isoformat()))
     gap = (expected - asof).days
     if gap <= 0:
         return "ok", gap
-    # 금요일 휴장 시 목요일 종가가 정상적인 직전 거래일이므로 최소 1일은 허용한다.
-    tol = max(1, D.LAG_TOLERANCE.get(key, 0))
-    return ("delayed" if gap <= tol else "stale"), gap
+    return "stale", gap
 
 
 # ─────────────────────────────── 지표 1건 수집
@@ -197,7 +197,7 @@ def collect_rate_yahoo(key, symbol, label, badge, last_mon, last_fri, ytd_start)
     return rec, flag
 
 
-def collect_ecos_rate(key, item, label, badge, last_mon, last_fri, ytd_start):
+def _collect_ecos_rate(key, item, label, badge, last_mon, last_fri, ytd_start):
     api_key = os.getenv("ECOS_API_KEY")
     if not api_key:
         print(f"  ! ECOS_API_KEY 없음 — {label} 건너뜀")
@@ -208,9 +208,11 @@ def collect_ecos_rate(key, item, label, badge, last_mon, last_fri, ytd_start):
     for stat, cycle in combos:
         rows, err = D._ecos_get(f"https://ecos.bok.or.kr/api/StatisticSearch/{api_key}/json/kr/1/900/"
                                 f"{stat}/{cycle}/{start}/{end}/{item}")
+        if D._ecos_unavailable:
+            break
         if not rows:
             continue
-        rows = sorted([r for r in rows if r.get("DATA_VALUE")], key=lambda r: r["TIME"])
+        rows = sorted([r for r in rows if r.get("DATA_VALUE") and r["TIME"] <= end], key=lambda r: r["TIME"])
         if not rows:
             continue
         D._ecos_combo = (stat, cycle)
@@ -250,6 +252,68 @@ def collect_ecos_rate(key, item, label, badge, last_mon, last_fri, ytd_start):
                "trend": "".join(arrows), "trend_color": trend_color}
         return rec, (status, gap)
     return None, ("stale", None)
+
+
+def bond_history(key, last_fri, ytd_start):
+    symbol = {"ktb3y": "KR3YT=RR", "ktb10y": "KR10YT=RR"}[key]
+    url = f"https://api.stock.naver.com/marketindex/bond/{symbol}/prices"
+    points = {}
+    oldest = None
+    for page in range(1, 7):
+        try:
+            response = D.requests.get(url, params={"pageSize": 60, "page": page}, timeout=(3, 8))
+            response.raise_for_status()
+            rows = response.json()
+            if not isinstance(rows, list) or not rows:
+                break
+            dates = []
+            for row in rows:
+                stamp = dt.datetime.fromisoformat(row["localTradedAt"])
+                if stamp.utcoffset() is None:
+                    continue
+                day = stamp.astimezone(KST).date()
+                dates.append(day)
+                value = float(row["closePrice"].replace(",", ""))
+                if day <= last_fri and math.isfinite(value):
+                    points[day] = value
+            if not dates or (oldest is not None and min(dates) >= oldest):
+                break
+            oldest = min(dates)
+            if oldest <= ytd_start:
+                break
+        except Exception as exc:
+            print(f"  ! {key} 과거 시세 조회: {type(exc).__name__} — 확보된 구간만 사용")
+            break
+    return points
+
+
+def collect_ecos_rate(key, item, label, badge, last_mon, last_fri, ytd_start):
+    rec, flag = _collect_ecos_rate(key, item, label, badge, last_mon, last_fri, ytd_start)
+    if rec:
+        rec["src"] = "한국은행 ECOS"
+        return rec, flag
+    points = bond_history(key, last_fri, ytd_start)
+    if not points:
+        return None, ("stale", None)
+    days = sorted(points)
+    asof, close = days[-1], points[days[-1]]
+    def at(target):
+        expected = dt.date.fromisoformat(D.expected_close(key, target.isoformat()))
+        return points.get(expected)
+    prev = at(last_mon - dt.timedelta(days=3))
+    first = [d for d in days if ytd_start <= d <= ytd_start + dt.timedelta(days=7)]
+    ytd = points[first[0]] if first else None
+    values = [at(last_fri - dt.timedelta(weeks=i)) for i in range(4, -1, -1)]
+    arrows = ["－" if a is None or b is None or a == b else ("▲" if b > a else "▼")
+              for a, b in zip(values, values[1:])]
+    up, down = arrows.count("▲"), arrows.count("▼")
+    rec = {"key": key, "label": label, "badge": badge, "unit": "bp",
+           "value": round(close, 3), "asof": asof.isoformat(),
+           "wow_pct": round((close - prev) * 100, 1) if prev is not None else None,
+           "ytd_pct": round((close - ytd) * 100, 1) if ytd is not None else None,
+           "trend": "".join(arrows), "trend_color": "up" if up > down else "dn" if down > up else "fl",
+           "src": "Npay·Reuters 시장수익률"}
+    return rec, classify_freshness(asof, last_fri, key)
 
 
 # ─────────────────────────────── 메인
@@ -301,7 +365,7 @@ def main():
     for key, sym, label, badge in YAHOO_RATES:
         record(key, *collect_rate_yahoo(key, sym, label, badge, last_mon, last_fri, ytd_start))
 
-    print("[4/4] 국고채 (ECOS)")
+    print("[4/4] 국고채 (ECOS → Npay·Reuters 과거 이력)")
     for key, item, label, badge in ECOS_RATES:
         record(key, *collect_ecos_rate(key, item, label, badge, last_mon, last_fri, ytd_start))
 

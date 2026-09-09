@@ -119,6 +119,8 @@ def row_html(key, r, stale_set, delayed_set, value_fmt=lambda v: num(v)):
         sub += ' · ⚠ 최신 아님'
     elif key in delayed_set:
         sub += ' · 1일 지연'
+    if r.get("src"):
+        sub += ' · ' + html.escape(str(r["src"]))
 
     value = r.get("value")
     if value is None:
