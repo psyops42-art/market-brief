@@ -1,7 +1,7 @@
 {
-  "slug": "2026-09-11",
+  "slug": "2026-09-14",
   "unresolved": [],
-  "cutoff": "2026-09-10",
+  "cutoff": "2026-09-11",
   "stale": [],
   "delayed": [],
   "collected": [
@@ -26,7 +26,5 @@
     "vix",
     "wti"
   ],
-  "brief_issues": [
-    "정리문장 3이 46자로 김 (45자 제한)"
-  ]
+  "brief_issues": []
 }
