@@ -1,17 +1,19 @@
 {
-  "slug": "weekly-2026-09-14",
+  "slug": "weekly-2026-09-21",
   "last_week": {
-    "mon": "2026-09-07",
-    "fri": "2026-09-11"
-  },
-  "this_week": {
     "mon": "2026-09-14",
     "fri": "2026-09-18"
+  },
+  "this_week": {
+    "mon": "2026-09-21",
+    "fri": "2026-09-25"
   },
   "unresolved": [],
   "stale": [],
   "delayed": [],
-  "brief_issues": [],
+  "brief_issues": [
+    "헤드라인 3 날짜(9/19)가 지난주 범위(2026-09-14~2026-09-18) 밖"
+  ],
   "og_ok": true,
   "og_error": "",
   "collected": [
