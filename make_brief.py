@@ -101,7 +101,7 @@ def call_api(prompt: str, key: str, source_urls: set | None = None) -> str:
             r = requests.post(API, headers=headers, json=body, timeout=180)
             if r.status_code == 200:
                 payload = r.json()
-                text = "".join(b.get("text", "") for b in payload.get("content", [])
+                text = "\n".join(b.get("text", "") for b in payload.get("content", [])
                                if b.get("type") == "text")
                 if not text.strip():
                     raise ValueError("API 응답에 텍스트 블록이 없습니다")
@@ -119,11 +119,26 @@ def call_api(prompt: str, key: str, source_urls: set | None = None) -> str:
 
 
 def parse_json(text: str) -> dict:
-    text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
-    i, j = text.find("{"), text.rfind("}")
-    if i < 0 or j < 0:
-        sys.exit("JSON을 찾지 못했습니다:\n" + text[:600])
-    return json.loads(text[i:j + 1])
+    """Read complete objects separately; metadata/prose isn't another brief.
+
+    Search responses can contain draft and final JSON in separate text blocks.
+    Prefer the last complete briefing object, never splice braces across them.
+    """
+    decoder = json.JSONDecoder()
+    pos, brief = 0, None
+    while (pos := text.find("{", pos)) >= 0:
+        try:
+            candidate, end = decoder.raw_decode(text, pos)
+        except json.JSONDecodeError:
+            pos += 1
+            continue
+        pos = end
+        if (isinstance(candidate, dict) and isinstance(candidate.get("headlines"), list)
+                and isinstance(candidate.get("checkpoint"), dict)):
+            brief = candidate
+    if brief is None:
+        raise ValueError("완성된 브리핑 JSON(headlines·checkpoint)을 찾지 못했습니다")
+    return brief
 
 
 def news_window(today: dt.date, asof: dt.datetime | None = None):
@@ -259,7 +274,14 @@ def generate_fresh_brief(prompt: str, key: str, today: dt.date, asof=None, evide
     labels = [f"헤드라인 {i}" for i in range(1, 4)] + ["국내 체크포인트"]
     for attempt in range(3):
         source_urls = set(evidence)
-        brief = parse_json(call_api(request, key, source_urls=source_urls))
+        response = call_api(request, key, source_urls=source_urls)
+        parse_issue = None
+        try:
+            brief = parse_json(response)
+        except ValueError as exc:
+            brief = {}
+            parse_issue = str(exc)
+            print(f"  ! 응답 형식 오류 ({attempt + 1}/3): {parse_issue}")
         headlines = brief.get("headlines", [])
         for item in (headlines if isinstance(headlines, list) else []) + [brief.get("checkpoint")]:
             if not isinstance(item, dict) or not isinstance(item.get("sources"), list):
@@ -270,6 +292,8 @@ def generate_fresh_brief(prompt: str, key: str, today: dt.date, asof=None, evide
                     source.update(name=verified["name"], published_at=verified["published_at"])
         format_sources(brief)
         issues = news_issues(brief, today, source_urls, asof)
+        if parse_issue:
+            issues.append(parse_issue)
         if not issues:
             return brief
         cards = (headlines[:3] if isinstance(headlines, list) else [])

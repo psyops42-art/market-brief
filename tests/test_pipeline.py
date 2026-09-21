@@ -120,6 +120,48 @@ class ValidationTests(unittest.TestCase):
 class NewsFreshnessTests(unittest.TestCase):
     day = dt.date(2026, 9, 7)
 
+    def test_multiple_json_objects_select_final_brief_not_metadata(self):
+        draft, final = self.fresh_brief(), self.fresh_brief()
+        draft["og_description"] = "draft"
+        final["og_description"] = 'final with {braces} and "quotes"'
+        response = ("검색 결과\n" + json.dumps({"sources": []}) + "\n```json\n"
+                    + json.dumps(draft) + "\n```\n수정본\n" + json.dumps(final)
+                    + '\n{"usage": 123}')
+        self.assertEqual(make_brief.parse_json(response), final)
+
+    def test_incomplete_or_nonbrief_json_is_rejected(self):
+        for response in ("JSON 없음", '{"headlines": [', '{"headlines": null,"checkpoint":{}}',
+                         '{"source":"metadata"}', json.dumps(self.fresh_brief())[:-1]):
+            with self.subTest(response=response), self.assertRaises(ValueError):
+                make_brief.parse_json(response)
+
+    def test_format_failure_retries_then_accepts_valid_response(self):
+        responses = iter(['{"headlines": [', json.dumps(self.fresh_brief())])
+        def api(prompt, key, source_urls):
+            source_urls.update(self.urls())
+            return next(responses)
+        with mock.patch.object(make_brief, "call_api", side_effect=api) as call, redirect_stdout(io.StringIO()):
+            result = make_brief.generate_fresh_brief("prompt", "test", self.day)
+        self.assertEqual(result, self.fresh_brief())
+        self.assertEqual(call.call_count, 2)
+
+    def test_final_malformed_response_keeps_prior_valid_cards_and_uses_rss(self):
+        draft = self.fresh_brief()
+        draft["checkpoint"]["sources"][0]["published_at"] = "2026-08-01T00:00:00+09:00"
+        evidence = {"https://example.test/rss": {"url": "https://example.test/rss",
+                    "name": "매체", "published_at": "2026-09-07T06:00:00+09:00",
+                    "title": "경제 뉴스", "summary": "확인된 기사 요약"}}
+        responses = iter([json.dumps(draft), 'not JSON', '{"headlines": ['])
+        def api(prompt, key, source_urls):
+            source_urls.update(self.urls())
+            return next(responses)
+        with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
+            result = make_brief.generate_fresh_brief("prompt", "test", self.day, evidence=evidence)
+        self.assertEqual(result["headlines"], draft["headlines"])
+        self.assertEqual(result["checkpoint"]["title"], "경제 뉴스")
+        self.assertEqual(make_brief.news_issues(result, self.day, self.urls() | set(evidence)), [])
+        self.assertIn("경제 뉴스", render.build_news(result))
+
     def fresh_brief(self):
         def item(i):
             return {"title": "새로운 보도", "body": "최신 기사에 근거한 설명",
