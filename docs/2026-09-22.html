@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#8FBBDD">
+
+<!-- ══════════════════════════════════════════════════════════════
+     카카오톡 · 슬랙 · 메신저 링크 미리보기(OG) 설정
+     ──────────────────────────────────────────────────────────────
+     ★ 배포 전 반드시 아래 두 줄의 도메인을 실제 주소로 바꾸세요.
+       og:url   → 이 HTML이 올라간 주소
+       og:image → og-20260829.png 가 올라간 주소 (절대경로 필수)
+     · 상대경로("./og.png")는 카카오톡이 읽지 못합니다. https:// 로 시작해야 합니다.
+     · 이미지는 1200×630, 5MB 이하, 로그인 없이 열리는 위치여야 합니다.
+     · 같은 URL은 카카오톡이 미리보기를 캐시하므로, 매일 파일명에 날짜를 넣어
+       새 URL로 배포하는 지금 방식을 유지하세요.
+     ══════════════════════════════════════════════════════════════ -->
+<meta property="og:type"        content="article">
+<meta property="og:site_name"   content="퇴직연금 데일리 마켓 브리핑">
+<meta property="og:locale"      content="ko_KR">
+<meta property="og:title"       content="글로벌 마켓 브리핑 | 2026년 9월 22일 (화) 아침">
+<meta property="og:description" content="9/21 S&amp;P 500 +1.49%·나스닥100 +2.83% 급등. 유가 WTI -8.34%, 美 10년물 금리 4.96%로 하락. 국내에선 7월 대기업 연체율 5년 만에 최고 발표.">
+<meta property="og:url"         content="https://psyops42-art.github.io/market-brief/2026-09-22.html">
+<meta property="og:image"       content="https://psyops42-art.github.io/market-brief/og-2026-09-22.png">
+<meta property="og:image:width"  content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt"   content="글로벌 마켓 브리핑 | 2026년 9월 22일 (화) 아침">
+
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:title"       content="글로벌 마켓 브리핑 | 2026년 9월 22일 (화) 아침">
+<meta name="twitter:description" content="9/21 S&amp;P 500 +1.49%·나스닥100 +2.83% 급등. 유가 WTI -8.34%, 美 10년물 금리 4.96%로 하락. 국내에선 7월 대기업 연체율 5년 만에 최고 발표.">
+<meta name="twitter:image"       content="https://psyops42-art.github.io/market-brief/og-2026-09-22.png">
+
+<meta name="description" content="9/21 S&amp;P 500 +1.49%·나스닥100 +2.83% 급등. 유가 WTI -8.34%, 美 10년물 금리 4.96%로 하락. 국내에선 7월 대기업 연체율 5년 만에 최고 발표.">
+<meta name="author" content="PHILIP">
+<title>글로벌 마켓 브리핑 | 2026년 9월 22일 (화) 아침</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:#DFE4E1;
+  font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  color:#2b2f33;line-height:1.5;
+}
+.app{max-width:520px;margin:0 auto;background:#F4F6F4;min-height:100vh;position:relative;overflow-x:hidden}
+
+/* ── 상단 밴드 ── */
+.band{
+  background:linear-gradient(100deg,#AFA2E6 0%,#95B6DE 42%,#5FD3B0 100%);
+  padding:calc(14px + env(safe-area-inset-top)) 20px 22px 20px;
+}
+.band .eyebrow{font-size:12px;color:rgba(255,255,255,.88);font-weight:500;letter-spacing:-.2px}
+.band h1{font-size:26px;font-weight:900;color:#fff;letter-spacing:-1.2px;margin-top:3px}
+.band .date{font-size:12.5px;color:rgba(255,255,255,.94);margin-top:6px;letter-spacing:-.3px}
+
+/* ── 탭 메뉴 (스티키) ── */
+.tabs{
+  position:sticky;top:0;z-index:50;display:flex;
+  background:rgba(244,246,244,.96);backdrop-filter:saturate(180%) blur(8px);
+  border-bottom:1px solid #DFE4E0;padding:7px 10px;gap:7px;
+}
+.tabs button{
+  flex:1;border:none;background:#EAEDEA;color:#78818a;
+  font-family:inherit;font-size:13.5px;font-weight:800;letter-spacing:-.5px;
+  padding:10px 0;border-radius:10px;cursor:pointer;transition:.18s;
+}
+.tabs button .no{
+  display:inline-block;width:16px;height:16px;line-height:16px;border-radius:5px;
+  background:#C9CFC9;color:#fff;font-size:10.5px;margin-right:5px;vertical-align:1px;
+}
+.tabs button.on{background:linear-gradient(95deg,#A99BE0,#8FBBDD 55%,#63D3B2);color:#fff;box-shadow:0 2px 8px rgba(120,140,180,.28)}
+.tabs button.on .no{background:rgba(255,255,255,.32)}
+
+.sheet{padding:16px 14px 0 14px}
+.pg{display:none;animation:fade .22s ease}
+.pg.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── 섹션 헤더 ── */
+.sec{
+  background:linear-gradient(95deg,#A99BE0 0%,#8FBBDD 55%,#63D3B2 100%);
+  border-radius:11px;padding:10px 14px;display:flex;align-items:center;margin:0 0 13px 0;
+}
+.sec .ck{width:19px;height:19px;border:2px solid #fff;border-radius:5px;color:#fff;
+  font-size:12px;font-weight:900;text-align:center;line-height:15px;margin-right:9px;flex:none}
+.sec h2{font-size:16.5px;font-weight:800;color:#fff;letter-spacing:-.7px}
+
+.sec2{display:flex;align-items:center;margin:0 0 8px 2px}
+.sec2 .ck{width:17px;height:17px;border:2px solid #63D3B2;border-radius:5px;color:#3FB99A;
+  font-size:11px;font-weight:900;text-align:center;line-height:13px;margin-right:7px;flex:none}
+.sec2 span{font-size:14.5px;font-weight:800;letter-spacing:-.6px}
+.asof{text-align:right;font-size:11px;color:#8a939a;margin:0 2px 5px 0}
+
+/* ── 뉴스 카드 ── */
+.news{background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:14px 15px;margin-bottom:9px}
+.news .h{font-size:15px;font-weight:800;letter-spacing:-.7px;line-height:1.4;color:#1d2226}
+.news .h em{font-style:normal;color:#7C6BD0;font-weight:900;margin-right:4px}
+.news .d{font-size:12.5px;color:#5a636b;margin-top:7px;line-height:1.6;letter-spacing:-.3px}
+.news .s{font-size:11px;color:#a0a9b0;margin-top:6px}
+.news.kr{border:1.5px solid #9FE0C8;background:#F4FBF8}
+.news.kr .h{color:#1d5a48;font-size:14px}
+
+/* ── 지표 테이블 ── */
+.tbl{background:#fff;border:1px solid #E3E7E3;border-radius:13px;overflow:hidden;margin-bottom:16px}
+.tbl .th{display:flex;background:#EBEEEB;padding:8px 13px;font-size:11.5px;font-weight:800;color:#5a636b}
+.tbl .th .c1{flex:1}.tbl .th .c2{width:78px;text-align:right}.tbl .th .c3{width:92px;text-align:right}
+.row{display:flex;align-items:center;padding:11px 13px;border-top:1px solid #EDF0ED}
+.row .c1{flex:1;min-width:0;padding-right:6px}
+.row .nm{font-size:13.5px;font-weight:700;letter-spacing:-.5px;color:#22262a}
+.row .nm .bd{display:inline-block;font-size:9.5px;font-weight:800;color:#fff;background:#B5BEC6;
+  border-radius:4px;padding:1px 5px;margin-right:5px;vertical-align:2px;letter-spacing:0}
+.row .nm .bd.kr{background:#63C9A8}.row .nm .bd.us{background:#8FA8D8}
+.row .nm .bd.cn{background:#E0937C}.row .nm .bd.eu{background:#7E8BC4}
+.row .nm .bd.cr{background:#B49BE0}.row .nm .bd.fx{background:#7FB8C4}.row .nm .bd.cm{background:#C9A87C}
+.row .sub{font-size:10.5px;color:#98a1a8;margin-top:3px;line-height:1.4;letter-spacing:-.2px}
+.row .c2{width:78px;text-align:right;font-size:15px;font-weight:800;letter-spacing:-.4px}
+.row .c3{width:92px;text-align:right;font-size:11.5px;font-weight:800}
+.up{color:#E03B32}.dn{color:#2668C4}.fl{color:#8a939a}
+
+/* ── 마인드셋 ── */
+.mind{background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:13px 15px;margin-bottom:9px}
+.mind .n{font-size:10.5px;font-weight:900;color:#3FB99A;letter-spacing:1.2px}
+.mind .t{font-size:14.5px;font-weight:800;letter-spacing:-.6px;margin-top:3px;color:#1d2226}
+.mind .b{font-size:12.5px;color:#5a636b;line-height:1.65;margin-top:6px;letter-spacing:-.3px}
+.mind b{color:#2b2f33}
+.cs{display:flex;align-items:center;margin-top:11px}
+.cs .box{flex:1;border-radius:10px;padding:9px 0;text-align:center;color:#fff}
+.cs .box .l{font-size:10.5px;font-weight:700;opacity:.93}
+.cs .box .v{font-size:14.5px;font-weight:900;letter-spacing:-.5px;margin-top:1px}
+.cs .core{background:#4FCFA5}.cs .sat{background:#8FA8D8}
+.cs .plus{margin:0 9px;font-size:18px;font-weight:900;color:#A9B2B9}
+
+/* ── 인용/요약 박스 ── */
+.quote{background:#F6F3FD;border:1.5px solid #CDC1F1;border-radius:13px;padding:14px 15px;margin-top:11px}
+.quote .qh{font-size:12px;font-weight:900;color:#6B57C4;margin-bottom:9px}
+.quote p{font-size:12.5px;line-height:1.65;color:#33383d;padding-left:15px;position:relative;margin-bottom:8px;letter-spacing:-.3px}
+.quote p:last-child{margin-bottom:0}
+.quote p:before{content:"“";position:absolute;left:0;top:0;color:#9C88DF;font-size:16px;font-weight:900;line-height:1.2}
+.quote b{color:#5B45B8}
+
+.oneline{background:#EBF7F3;border:1.5px solid #93DBC3;border-radius:13px;padding:14px 15px}
+.oneline .qh{font-size:12px;font-weight:900;color:#2E9C7C;margin-bottom:8px}
+.oneline p{font-size:12.5px;line-height:1.68;color:#33383d;margin-bottom:6px;letter-spacing:-.3px}
+.oneline p:last-child{margin-bottom:0}
+.oneline .k{display:inline-block;min-width:34px;font-weight:900;color:#2E9C7C}
+.oneline b{color:#1F7A60}
+
+.nextbox{margin-top:10px;background:#FFF7EE;border:1.5px solid #F4D3A8;border-radius:13px;padding:12px 15px}
+.nextbox .qh{font-size:11.5px;font-weight:900;color:#C1801F;margin-bottom:6px}
+.nextbox p{font-size:12px;color:#4a5158;line-height:1.65;letter-spacing:-.3px}
+
+.note{margin-top:14px;font-size:10.5px;color:#8a939a;line-height:1.75;letter-spacing:-.2px}
+
+/* ── 하단 페이지 이동 ── */
+.pager{display:flex;align-items:center;gap:8px;margin:16px 0 0 0}
+.pager button{
+  flex:1;border:1px solid #D9DED9;background:#fff;color:#4a5158;font-family:inherit;
+  font-size:12.5px;font-weight:800;letter-spacing:-.4px;padding:12px 0;border-radius:11px;cursor:pointer;
+}
+.pager button:disabled{opacity:.35}
+.pager .ind{font-size:12px;font-weight:800;color:#8a939a;min-width:44px;text-align:center}
+
+.foot{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 2px calc(20px + env(safe-area-inset-bottom)) 2px;margin-top:6px;border-top:1px solid #E3E7E3}
+.logo{font-size:14px;font-weight:900;color:#1F4E9C;letter-spacing:-.3px}
+.logo span{font-size:10.5px;color:#5a636b;font-weight:700;margin-left:4px}
+.hint{font-size:10.5px;color:#a8b0b6}
+
+
+.srcbox{margin-top:14px;background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:13px 15px}
+.srcbox .qh{font-size:11.5px;font-weight:900;color:#3FB99A;margin-bottom:9px}
+.srcbox .lk{display:flex;flex-wrap:wrap;gap:6px}
+.srcbox a{flex:1 1 calc(50% - 3px);box-sizing:border-box;text-align:center;
+  font-size:11.5px;font-weight:800;letter-spacing:-.4px;
+  color:#2b6b52;background:#EDF8F4;border:1px solid #A9DEC9;border-radius:8px;
+  padding:9px 6px;text-decoration:none}
+.srcbox a.ef{color:#6B57C4;background:#F6F3FD;border-color:#CDC1F1}
+.srcbox .memo{font-size:10.5px;color:#98a1a8;margin-top:8px;line-height:1.6}
+
+@media (min-width:430px){
+  .band h1{font-size:29px}
+  .news .h{font-size:16px}.news .d{font-size:13px}
+  .row .nm{font-size:14.5px}.row .c2{font-size:16px;width:86px}.row .c3{width:100px;font-size:12px}
+  .mind .t{font-size:15.5px}.mind .b{font-size:13px}
+  .quote p,.oneline p{font-size:13px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="band">
+    <div class="eyebrow">퇴직연금 · 데일리 마켓</div>
+    <h1 id="ttl">글로벌 마켓 브리핑</h1>
+    <div class="date">2026년 9월 22일 (화) 아침 · 美 9/21 뉴욕 마감 · 韓 9/21 마감 기준</div>
+  </div>
+
+  <nav class="tabs">
+    <button id="t1" class="on" onclick="go(1)"><span class="no">1</span>글로벌 브리핑</button>
+    <button id="t2" onclick="go(2)"><span class="no">2</span>주요 시장지수</button>
+  </nav>
+
+  <div class="sheet">
+
+    <!-- ══════════ PAGE 1 ══════════ -->
+    <section class="pg on" id="p1">
+
+      <div class="sec"><div class="ck">✓</div><h2>오늘의 글로벌 헤드라인</h2></div>
+
+      <div class="news">
+        <div class="h"><em>①</em>유가 급락, 미·이란 외교 기대 반영</div>
+        <div class="d"><b>WTI -8.34%(91.93달러), 브렌트유 -7.70%(95.87달러)</b>로 나란히 큰 폭 하락했다. 트럼프 대통령이 유엔총회를 계기로 이란 대통령과의 회동 가능성을 열어두면서, 외교적 해법에 대한 기대가 유가 하락 요인으로 작용한 것으로 해석된다. 유가 하락은 미국 10년물 국채 금리 하락(4.96%, -3bp)과 맞물려 글로벌 주식시장 전반에 긍정적 환경을 조성한 것으로 분석된다.</div>
+        <div class="s">연합뉴스 · 9/22, Invezz · 9/21</div>
+      </div>
+      <div class="news">
+        <div class="h"><em>②</em>Meta Muse AI 돌풍, 칩株 동반 급등</div>
+        <div class="d">메타의 AI 에이전트 <b>Muse가 출시 12일 만에 애플 앱스토어 1위</b>에 오르자 메타 주가가 약 11% 급등했다. Wells Fargo는 목표주가를 640달러에서 796달러로 상향했으며, 칩 수요 기대감에 AMD·인텔 등 반도체주도 함께 올랐다. 나스닥100이 +2.83%를 기록한 배경에는 AI 섹터 전반에 대한 투자 심리 회복이 있는 것으로 해석된다.</div>
+        <div class="s">Yahoo Finance · 9/22 (한국시간), CNBC · 9/22 (한국시간)</div>
+      </div>
+      <div class="news">
+        <div class="h"><em>③</em>비트코인, 1월 이후 최고치 $86,000 돌파</div>
+        <div class="d"><b>비트코인이 86,415달러(+6.50%)</b>로 올해 1월 말 이후 최고 수준을 기록했다. 2025년 10월 사상최고치(126,000달러) 이후 이어진 &#x27;크립토 윈터&#x27;가 끝났다는 해석이 시장 일부에서 제기되고 있으나, 반론도 존재한다. 비트코인 연동 종목인 스트래티지·코인베이스도 5% 이상 급등하며 위험자산 선호 심리를 반영했다.</div>
+        <div class="s">CNBC · 9/22 (한국시간)</div>
+      </div>
+      <div class="news kr">
+        <div class="h">7월 대기업 연체율 0.36%, 5년 만에 최고</div>
+        <div class="d">금융감독원이 9월 22일 발표한 잠정통계에 따르면 <b>7월 말 국내은행 대기업 대출 연체율이 0.36%로 전월(0.22%) 대비 0.14%포인트 급등</b>, 2021년 7월 이후 5년 만에 최고치를 기록했다. 중앙그룹 계열사의 기업회생·워크아웃에 따른 수천억 원 규모 신규 연체채권 발생이 주된 원인으로 지목됐다. 은행권 전체 원화대출 연체율도 0.63%로 7월 기준 10년 만에 최고 수준이며, 금감원은 취약 부문 관리를 강화할 방침이라고 밝혔다.</div>
+        <div class="s">경북매일 · 9/22, 디지털타임스 · 9/22, 연합뉴스 · 9/22</div>
+      </div>
+
+      <div class="sec" style="margin-top:20px"><div class="ck">✓</div><h2>투자마인드</h2></div>
+
+      <div class="mind">
+        <div class="n">MINDSET 01</div>
+        <div class="t">유가 급락·금리 하락이 만든 주식 랠리, 지속성은 미지수</div>
+        <div class="b">9/21 글로벌 증시는 유가 급락과 미국채 금리 하락이 동시에 나타나며 위험자산 전반이 올랐다. 그러나 미·이란 외교 협상 결과, 연준 추가 인상 여부, 분기말 윈도드레싱 등 복수의 변수가 남아 있어 단기 모멘텀의 지속 여부는 불확실하다. 자산배분 관점에서는 단일 원인에 의한 랠리일수록 특정 자산으로 쏠리기보다 분산 유지가 중요한 시점으로 해석된다.</div>
+      </div>
+      <div class="mind">
+        <div class="n">MINDSET 02</div>
+        <div class="t">Core(TDF)·Satellite(ETF) 역할 분담 재확인</div>
+        <div class="b">AI 섹터와 암호화폐의 단기 급등은 Satellite ETF 편입 자산에서 발생하는 변동성 사례다. Core인 TDF는 이런 국면에서도 글로벌 분산 비중을 자동 유지하며 쏠림을 억제하는 역할을 한다. 현재처럼 섹터별 편차가 큰 장에서는 두 축의 역할 구분을 명확히 유지하는 것이 전략의 핵심이다.</div>
+        <div class="cs">
+          <div class="box core"><div class="l">핵심자산 Core</div><div class="v">TDF 30~50%</div></div>
+          <div class="plus">+</div>
+          <div class="box sat"><div class="l">위성 Satellite</div><div class="v">ETF 30~70%</div></div>
+        </div>
+      </div>
+      <div class="mind">
+        <div class="n">MINDSET 03</div>
+        <div class="t">국내 신용 리스크, 장기투자 원칙으로 대응</div>
+        <div class="b">국내 대기업 연체율이 5년 만에 최고치를 기록했다는 점은 채권·크레딧 스프레드 모니터링이 필요하다는 신호로 읽힐 수 있다. 그러나 단기 지표 변화를 이유로 장기 자산배분 전략을 수정하는 것은 퇴직연금의 목적에 부합하지 않는다. 정기 리밸런싱 일정을 지키며 시장 노이즈와 구조적 리스크를 구분하는 태도가 요구된다.</div>
+      </div>
+
+      <div class="quote">
+        <div class="qh">그대로 쓰는 정리 문장</div>
+        <p>유가·금리 하락에 오른 시장, <b>단기 모멘텀</b>에 비중을 실지 않는 것이 먼저입니다.</p>
+        <p>AI 랠리는 <b>Satellite 영역</b>의 이야기, Core TDF 비중은 그대로 유지하십시오.</p>
+        <p>국내 연체율 상승은 <b>크레딧 모니터링</b> 신호로 읽되, 전략 변경 이유는 아닙니다.</p>
+      </div>
+
+      <div class="note">
+        ※ 본 자료는 시장 정보 제공을 목적으로 작성되었으며, 특정 상품의 매매를 권유하지 않습니다.<br>
+        ※ 실적배당형 상품의 수익률은 과거 실적으로 미래 수익을 보장하지 않으며, 운용실적에 따라 원금손실이 발생할 수 있습니다.
+      </div>
+    </section>
+
+    <!-- ══════════ PAGE 2 ══════════ -->
+    <section class="pg" id="p2">
+
+      <div class="sec"><div class="ck">✓</div><h2>주요 금융 지표</h2></div>
+
+      <div class="sec2"><div class="ck">✓</div><span>국내외 주식시장</span></div>
+      <div class="asof">(전일 대비 기준)</div>
+      <div class="tbl">
+        <div class="th"><div class="c1">지수</div><div class="c2">지수값</div><div class="c3">등락</div></div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd us">미국</span>S&amp;P 500</div><div class="sub">9/21 종가 · 다우 52,048.83(+0.71%)</div></div>
+          <div class="c2">7,764.70</div><div class="c3 up">▲ 114.20<br>+1.49%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd us">미국</span>나스닥 100</div><div class="sub">9/21 종가 · 나스닥 종합 27,122.09</div></div>
+          <div class="c2">30,482.35</div><div class="c3 up">▲ 838.18<br>+2.83%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd kr">국내</span>코스피</div><div class="sub">9/21 종가 · 코스닥 836.27(+1.11%)</div></div>
+          <div class="c2">7,007.72</div><div class="c3 up">▲ 113.49<br>+1.65%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd cn">중국</span>상해종합</div><div class="sub">9/21 종가</div></div>
+          <div class="c2">3,949.91</div><div class="c3 up">▲ 38.04<br>+0.97%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd eu">유럽</span>유로스톡스 50</div><div class="sub">9/21 종가 · DAX 25,575.01(+1.07%)</div></div>
+          <div class="c2">6,318.20</div><div class="c3 up">▲ 82.00<br>+1.31%</div>
+        </div>
+      </div>
+
+      <div class="sec2"><div class="ck">✓</div><span>국내외 채권 금리</span></div>
+      <div class="asof">(전일 대비 기준)</div>
+      <div class="tbl">
+        <div class="th"><div class="c1">종목</div><div class="c2">금리</div><div class="c3">등락</div></div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd kr">국내</span>국고채 3년</div><div class="sub">9/21 종가 · 한국은행 ECOS</div></div>
+          <div class="c2">4.056%</div><div class="c3 up">▲ 2.1bp</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd kr">국내</span>국고채 10년</div><div class="sub">9/21 종가 · 한국은행 ECOS</div></div>
+          <div class="c2">4.457%</div><div class="c3 dn">▼ 0.9bp</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd us">미국</span>미국채 10년</div><div class="sub">9/21 종가</div></div>
+          <div class="c2">4.960%</div><div class="c3 dn">▼ 3.0bp</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd us">미국</span>미국채 30년</div><div class="sub">9/21 종가</div></div>
+          <div class="c2">5.300%</div><div class="c3 dn">▼ 3.0bp</div>
+        </div>
+      </div>
+
+      <div class="sec2"><div class="ck">✓</div><span>원자재 / 환율</span></div>
+      <div class="asof">(전일 대비 기준)</div>
+      <div class="tbl">
+        <div class="th"><div class="c1">지표</div><div class="c2">가격</div><div class="c3">등락</div></div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd fx">환율</span>달러인덱스 (pt)</div><div class="sub">9/21 종가</div></div>
+          <div class="c2">100.43</div><div class="c3 up">▲ 0.21<br>+0.20%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd fx">환율</span>달러/원 (USD/KRW)</div><div class="sub">9/21 종가</div></div>
+          <div class="c2">1,374.03</div><div class="c3 dn">▼ 5.50<br>-0.40%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd cm">원자재</span>국제금 ($/oz, 선물)</div><div class="sub">9/21 종가</div></div>
+          <div class="c2">4,389.50</div><div class="c3 dn">▼ 35.40<br>-0.80%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd cm">원자재</span>유가 WTI ($/bbl, 선물)</div><div class="sub">9/21 종가 · 브렌트 $95.87</div></div>
+          <div class="c2">91.93</div><div class="c3 dn">▼ 8.37<br>-8.34%</div>
+        </div>
+        <div class="row">
+          <div class="c1"><div class="nm"><span class="bd cr">가상자산</span>비트코인 (BTC/USD)</div><div class="sub">9/21 종가 · 24시간 거래</div></div>
+          <div class="c2">86,415.00</div><div class="c3 up">▲ 5,272.39<br>+6.50%</div>
+        </div>
+      </div>
+
+      <div class="sec"><div class="ck">✓</div><h2>오늘의 한 줄</h2></div>
+
+      <div class="oneline">
+        <p><span class="k">시장</span> 유가 급락과 AI 랠리가 맞물리며 글로벌 주요 증시가 일제히 상승, 나스닥100은 +2.83%로 가장 큰 폭의 반등을 기록했다.</p>
+        <p><span class="k">연금</span> 단기 급등 자산에 추격 매수보다 TDF 중심의 분산 원칙을 유지하는 것이 퇴직연금 운용의 기본이다.</p>
+      </div>
+
+      <div class="nextbox">
+        <div class="qh">이벤트 및 일정 체크</div>
+        <p>미·중 정상회담(트럼프·시진핑, 뉴욕) · 미 연준 위원 다수 발언 예정(이번 주) · 유엔총회 계기 미·이란 외교 접촉 가능성 · 국내 금감원 연체율 추이 모니터링</p>
+      </div>
+
+      <div class="srcbox">
+        <div class="qh">시세 직접 조회</div>
+        <div class="lk">
+          <a href="https://m.stock.naver.com/domestic" target="_blank" rel="noopener">네이버 국내증시</a>
+          <a href="https://m.stock.naver.com/worldstock" target="_blank" rel="noopener">네이버 해외증시</a>
+          <a href="https://m.stock.naver.com/marketindex" target="_blank" rel="noopener">네이버 시장지표</a>
+          <a class="ef" href="https://m.funetf.co.kr/" target="_blank" rel="noopener">ETF 조회</a>
+        </div>
+        <div class="memo">모바일 네이버페이증권으로 연결됩니다. 환율·유가·금·국고채는 시장지표에서, 상해종합·유로스톡스50은 해외증시에서 확인하세요. ETF 수익률·순자산은 FunETF에서 조회합니다.</div>
+      </div>
+
+      <div class="note">
+        ※ 지수·환율·원자재는 Yahoo Finance, 미국채는 Yahoo Finance, 기준금리는 ECOS·FRED, 국고채는 한국은행 ECOS 자료를 자동 수집한 값입니다. 항목별 기준일은 각 행에 표기했습니다.<br>
+        ※ 금·유가는 선물 기준이며 현물과 차이가 있을 수 있습니다. 비트코인은 24시간 거래되어 주식시장 마감 시점과 기준이 다릅니다.<br>
+
+        ※ 본 자료는 시장 정보 제공을 목적으로 작성되었으며, 특정 상품의 매매를 권유하지 않습니다.<br>
+        ※ 실적배당형 상품의 수익률은 과거 실적으로 미래 수익을 보장하지 않으며, 운용실적에 따라 원금손실이 발생할 수 있고 그 손실은 가입자에게 귀속됩니다.
+      </div>
+    </section>
+
+
+    <div class="pager">
+      <button id="prev" onclick="go(cur-1)">← 이전</button>
+      <div class="ind" id="ind">1 / 2</div>
+      <button id="next" onclick="go(cur+1)">다음 →</button>
+    </div>
+
+    <div class="foot">
+      <div class="logo">MORNING BRIEF <span>작성 PHILIP</span></div>
+      <div class="hint">좌우로 밀어 넘기기</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var cur = 1;
+var TITLES = {1:'글로벌 마켓 브리핑', 2:'주요 시장지수'};
+var LAST = 2;
+
+function go(n){
+  if(n < 1 || n > LAST) return;
+  cur = n;
+  for(var i=1;i<=LAST;i++){
+    document.getElementById('p'+i).classList.toggle('on', i===n);
+    document.getElementById('t'+i).classList.toggle('on', i===n);
+  }
+  document.getElementById('ttl').textContent = TITLES[n];
+  document.getElementById('ind').textContent = n + ' / ' + LAST;
+  document.getElementById('prev').disabled = (n===1);
+  document.getElementById('next').disabled = (n===LAST);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* 좌우 스와이프 */
+var x0=null, y0=null;
+document.addEventListener('touchstart', function(e){
+  x0 = e.changedTouches[0].clientX; y0 = e.changedTouches[0].clientY;
+}, {passive:true});
+document.addEventListener('touchend', function(e){
+  if(x0===null) return;
+  var dx = e.changedTouches[0].clientX - x0;
+  var dy = e.changedTouches[0].clientY - y0;
+  if(Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)*1.6){
+    go(dx < 0 ? cur+1 : cur-1);
+  }
+  x0 = null; y0 = null;
+}, {passive:true});
+
+/* 키보드(PC 확인용) */
+document.addEventListener('keydown', function(e){
+  if(e.key==='ArrowRight') go(cur+1);
+  if(e.key==='ArrowLeft')  go(cur-1);
+});
+
+go(1);
+</script>
+</body>
+</html>
