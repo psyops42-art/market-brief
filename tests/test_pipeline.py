@@ -359,6 +359,15 @@ class NewsFreshnessTests(unittest.TestCase):
 
 
 class RenderSmokeTests(unittest.TestCase):
+    def test_notifications_share_stable_daily_url_and_keep_weekly_url(self):
+        import notify
+        for slug, page, expected in (("2026-09-23", "daily.html", "daily.html"),
+                                     ("weekly-2026-09-21", None, "weekly-2026-09-21.html")):
+            subject, body, link = notify.compose({"slug": slug, "page": page}, "https://example.test", "42")
+            self.assertEqual(link, "https://example.test/" + expected)
+            self.assertIn(link, body)
+            self.assertIn(slug, subject)
+
     def test_daily_main_renders_with_missing_optional_data(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temp:
@@ -366,6 +375,8 @@ class RenderSmokeTests(unittest.TestCase):
             data_path = temp_path / "data.json"
             brief_path = temp_path / "brief.json"
             out_path = temp_path / "out"
+            out_path.mkdir()
+            (out_path / "daily.html").write_text("previous edition", encoding="utf-8")
             data_path.write_text(json.dumps({
                 "generated_at": "2026-09-07T23:00:00+09:00",
                 "briefing_date": "2026-09-07",
@@ -394,6 +405,12 @@ class RenderSmokeTests(unittest.TestCase):
             self.assertTrue((out_path / "og-2026-09-07.png").exists())
             report = json.loads((out_path / "report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["slug"], "2026-09-07")
+            self.assertEqual(report["page"], "daily.html")
+            stable = (out_path / "daily.html").read_text(encoding="utf-8")
+            self.assertNotIn("previous edition", stable)
+            self.assertIn('content="https://psyops42-art.github.io/market-brief/daily.html"', stable)
+            self.assertIn("마켓맵 조회", stable)
+            self.assertIn("심리지수 조회", stable)
             self.assertIn(("S&P 500", "-", "-", "fl"), og.call_args.args[3])
 
     def test_weekly_main_renders_with_missing_optional_data(self):

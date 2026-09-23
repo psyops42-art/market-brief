@@ -2,11 +2,11 @@ name: 데일리 마켓 브리핑
 
 on:
   schedule:
-    # 22:00 UTC = 07:00 KST
+    # 22:20 UTC = 07:20 KST
     # UTC 일~목 = KST 월~금 아침
-    #   일 22:00 UTC → 월 07:00 KST (직전 거래일 = 지난 금요일 마감)
-    #   목 22:00 UTC → 금 07:00 KST (직전 거래일 = 목요일 마감)
-    - cron: "0 22 * * 0-4"
+    #   일 22:20 UTC → 월 07:20 KST (직전 거래일 = 지난 금요일 마감)
+    #   목 22:20 UTC → 금 07:20 KST (직전 거래일 = 목요일 마감)
+    - cron: "20 22 * * 0-4"
   workflow_dispatch:
 
 permissions:
@@ -85,7 +85,7 @@ jobs:
           git commit \
             -m "브리핑 $SLUG 자동 배포" \
             -m "▼ 카톡에 붙여넣을 링크" \
-            -m "$PAGES_BASE/$SLUG.html" \
+            -m "$PAGES_BASE/daily.html" \
             -m "아카이브 : $PAGES_BASE/"
 
           echo "▶ 푸시"
@@ -95,7 +95,7 @@ jobs:
             git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
             git push
           fi
-          echo "▶ 배포 완료 : $PAGES_BASE/$SLUG.html"
+          echo "▶ 배포 완료 : $PAGES_BASE/daily.html"
 
       - name: 5단계 · 알림 (이슈 + 메일)
         if: success()
@@ -131,10 +131,10 @@ jobs:
           print(f"## {icon} 데일리 마켓 브리핑 {slug}{note}\n")
           print("| 항목 | 링크 |")
           print("|---|---|")
-          print(f"| 공유 링크 | {base}/{slug}.html?v={ver} |")
+          print(f"| 공유 링크 | {base}/daily.html |")
           print(f"| 썸네일 | {base}/og-{slug}.png?v={ver} |")
           print(f"| 아카이브 | {base}/ |\n")
-          print("> 카톡에는 `?v=` 없이 `.html` 까지만 붙여넣으세요. 위 링크는 캐시를 피해 확인용입니다.\n")
+          print("> 공유 링크는 매일 같은 주소이며, 마지막으로 배포된 브리핑으로 갱신됩니다.\n")
           stale = rep.get("stale", [])
           delayed = rep.get("delayed", [])
           print(f"**기준일** {rep.get('cutoff', '-')}\n")

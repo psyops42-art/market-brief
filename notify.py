@@ -43,7 +43,7 @@ def compose(rep, base, run, label="마켓 브리핑"):
     issues = rep.get("brief_issues", [])
     stale = rep.get("stale", [])
     delayed = rep.get("delayed", [])
-    link = f"{base}/{slug}.html"
+    link = f"{base}/{rep.get('page') or slug + '.html'}"
 
     needs_check = bool(unresolved or issues or stale)
     status = "확인 필요" if needs_check else "정상"

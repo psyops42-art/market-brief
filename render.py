@@ -274,6 +274,10 @@ def main():
     with open(path, "w", encoding="utf-8") as fp:
         fp.write(out_html)
     print(f"  · 대시보드 → {path}")
+    # Stable public URL; retain dated files for the archive and dated OG image
+    # so each new edition can advertise its own thumbnail.
+    with open(os.path.join(args.out, "daily.html"), "w", encoding="utf-8") as fp:
+        fp.write(out_html.replace(f"{args.base}/{slug}.html", f"{args.base}/daily.html"))
 
     # ── OG 썸네일 : 대시보드 실제 화면을 캡처해 합성 ──
     kpi_spec = [("코스피", "kospi"), ("S&P 500", "sp500"), ("국고채 3년", "ktb3y"), ("국제금", "gold")]
@@ -283,7 +287,7 @@ def main():
     make_og.build(path, png, date_line, kpis, str(brief.get("oneline_market", "")), tmpdir=args.out)
     print(f"  · OG 썸네일 → {png}")
 
-    report = {"slug": slug, "unresolved": UNRESOLVED,
+    report = {"slug": slug, "page": "daily.html", "unresolved": UNRESOLVED,
               "cutoff": cutoff,
               "stale": [f'{x["label"]}({fmt_date(x["asof"])})' for x in STALE.values()],
               "delayed": [f'{x["label"]}({fmt_date(x["asof"])})' for x in DELAYED.values()],
