@@ -258,7 +258,7 @@ def main():
                 .replace("{{TITLE}}", html.escape(title))
                 .replace("{{OG_DESC}}", html.escape(str(brief.get("og_description", ""))))
                 .replace("{{OG_URL}}", f"{args.base}/{slug}.html")
-                .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png")
+                .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png?v=summary2")
                 .replace("{{DATE_LINE}}", date_line)
                 .replace("{{NEWS}}", build_news(brief))
                 .replace("{{MINDSET}}", build_mindset(brief))
@@ -279,7 +279,7 @@ def main():
     with open(os.path.join(args.out, "daily.html"), "w", encoding="utf-8") as fp:
         fp.write(out_html.replace(f"{args.base}/{slug}.html", f"{args.base}/daily.html"))
 
-    # ── OG 썸네일 : 대시보드 실제 화면을 캡처해 합성 ──
+    # ── OG 썸네일 : 제목·핵심 지표·시장 요약을 전체 폭으로 배치 ──
     kpi_spec = [("코스피", "kospi"), ("S&P 500", "sp500"), ("국고채 3년", "ktb3y"), ("국제금", "gold")]
     kpis = [kpi(label, S.get(key)) for label, key in kpi_spec]
 
