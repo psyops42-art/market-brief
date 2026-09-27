@@ -6,8 +6,15 @@ on:
     # UTC 일~목 = KST 월~금 아침
     #   일 22:20 UTC → 월 07:20 KST (직전 거래일 = 지난 금요일 마감)
     #   목 22:20 UTC → 금 07:20 KST (직전 거래일 = 목요일 마감)
-    - cron: "20 22 * * 0-4"
+    - cron: "20,35,50 22 * * 0-4"
+    - cron: "5,35 23 * * 0-4"
+    - cron: "5 0 * * 1-5"
   workflow_dispatch:
+    inputs:
+      automatic:
+        description: "예약 호출: 당일 배포 완료 시 중복 실행 생략"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -22,11 +29,33 @@ env:
   PAGES_BASE: https://psyops42-art.github.io/market-brief
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      run: ${{ steps.guard.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 한국시간 예약·당일 배포 확인
+        id: guard
+        env:
+          AUTOMATIC: ${{ inputs.automatic }}
+        run: python schedule_guard.py --kind daily
+
   build:
+    needs: preflight
+    if: needs.preflight.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-python@v5
         with:
