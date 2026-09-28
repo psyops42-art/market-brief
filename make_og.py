@@ -72,15 +72,17 @@ def wrap(text, f, max_w, draw, limit=3):
     return lines
 
 
-def build(html_path, out_png, date_line, kpis, oneline, tmpdir=None):
+def build(html_path, out_png, date_line, kpis, oneline, tmpdir=None, *,
+          eyebrow="퇴직연금 · 데일리 마켓", title="글로벌 마켓 브리핑",
+          summary_label="오늘의 한 줄", footer_label="MORNING BRIEF"):
     """Keep the renderer call signature; no dashboard screenshots are needed."""
     import html
     import re
     bg = gradient()
     d = ImageDraw.Draw(bg)
     white = (255, 255, 255)
-    d.text((48, 24), "퇴직연금 · 데일리 마켓", font=font(28), fill=white)
-    d.text((44, 62), "글로벌 마켓 브리핑", font=font(82, True), fill=white)
+    d.text((48, 24), eyebrow, font=font(28), fill=white)
+    d.text((44, 62), title, font=font(82, True), fill=white)
     d.text((48, 172), date_line, font=fit_font(date_line, 30, 1104, d), fill=white)
 
     width, gap, top, height = 264, 16, 236, 146
@@ -94,12 +96,12 @@ def build(html_path, out_png, date_line, kpis, oneline, tmpdir=None):
                font=fit_font(change, 30, width - 36, d), fill={"up": UP, "dn": DN}.get(direction, FL))
 
     d.rounded_rectangle((48, 402, 1152, 570), radius=20, fill=white)
-    d.text((70, 414), "오늘의 한 줄", font=font(30, True), fill=(46, 156, 124))
+    d.text((70, 414), summary_label, font=font(30, True), fill=(46, 156, 124))
     plain = html.unescape(re.sub(r"<[^>]*>", "", str(oneline)))
     f = font(36)
     for i, line in enumerate(wrap(plain, f, 1060, d, limit=2)):
         d.text((70, 462 + i * 47), line, font=f, fill=(51, 56, 61))
-    d.text((48, 588), "MORNING BRIEF", font=font(23, True), fill=white)
+    d.text((48, 588), footer_label, font=font(23, True), fill=white)
     footer = "작성 PHILIP"
     d.text((1152 - d.textlength(footer, font=font(23)), 588), footer, font=font(23), fill=white)
     bg.quantize(colors=220, method=2).save(out_png, optimize=True)

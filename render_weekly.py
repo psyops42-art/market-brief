@@ -295,7 +295,7 @@ def main():
                 .replace("{{TITLE}}", html.escape(title))
                 .replace("{{OG_DESC}}", html.escape(str(brief.get("og_description", ""))))
                 .replace("{{OG_URL}}", f"{args.base}/{slug}.html")
-                .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png")
+                .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png?v=summary2")
                 .replace("{{DATE_LINE}}", date_line)
                 .replace("{{LAST_WEEK_NEWS}}", news)
                 .replace("{{MVP_CARD}}", mvp)
@@ -318,7 +318,7 @@ def main():
         fp.write(out_html)
     print(f"  · 대시보드 → {path}")
 
-    # ── OG 썸네일 : 1·3페이지(리뷰+지표) 실제 화면을 캡처해 합성 ──
+    # ── OG 썸네일 : 제목·주간 지표·회고를 전체 폭으로 배치 ──
     og_ok, og_error = False, ""
     try:
         import make_og_weekly

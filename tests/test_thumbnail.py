@@ -1,5 +1,6 @@
 import importlib.util
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -14,6 +15,23 @@ spec.loader.exec_module(thumbnail)
 
 
 class ThumbnailTests(unittest.TestCase):
+    def test_weekly_uses_full_width_layout_without_screenshots(self):
+        weekly_spec = importlib.util.spec_from_file_location(
+            "weekly_thumbnail", Path(__file__).resolve().parents[1] / "make_og_weekly.py")
+        weekly = importlib.util.module_from_spec(weekly_spec)
+        weekly_spec.loader.exec_module(weekly)
+        with tempfile.TemporaryDirectory() as folder, mock.patch.dict(sys.modules, {"make_og": thumbnail}):
+            output = Path(folder) / "weekly.png"
+            with mock.patch.object(thumbnail, "build", wraps=thumbnail.build) as build:
+                weekly.build("missing.html", output, "9월 21일~25일 정리",
+                             [("코스피", "7,080.92", "▲2.71%", "up")] * 4,
+                             "지난주 시장 회고 " * 30)
+            self.assertEqual(build.call_args.kwargs["title"], "주간 마켓 브리핑")
+            self.assertEqual(build.call_args.kwargs["summary_label"], "지난주 회고")
+            with Image.open(output) as image:
+                self.assertEqual(image.size, (1200, 630))
+                image.verify()
+
     def test_build_without_html_or_screenshot_tool(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "og.png"
