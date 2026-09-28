@@ -2,13 +2,9 @@ name: 데일리 마켓 브리핑
 
 on:
   schedule:
-    # 22:20 UTC = 07:20 KST
-    # UTC 일~목 = KST 월~금 아침
-    #   일 22:20 UTC → 월 07:20 KST (직전 거래일 = 지난 금요일 마감)
-    #   목 22:20 UTC → 금 07:20 KST (직전 거래일 = 목요일 마감)
-    - cron: "20,35,50 22 * * 0-4"
-    - cron: "5,35 23 * * 0-4"
-    - cron: "5 0 * * 1-5"
+    # 한국 표준시간 월~금 오전 07:20 (KST, UTC+9)
+    - cron: "20 7 * * 1-5"
+      timezone: "Asia/Seoul"
   workflow_dispatch:
     inputs:
       automatic:

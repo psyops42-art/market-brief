@@ -2,11 +2,9 @@ name: 주간 마켓 브리핑
 
 on:
   schedule:
-    # 21:00 UTC 일요일 = 06:00 KST 월요일
-    # 데일리(22:20 UTC = 07:20 KST)보다 먼저 돌아,
-    # 담당자가 데일리를 받기 전에 지난주 정리를 먼저 볼 수 있게 한다.
-    - cron: "0,15,35,55 21 * * 0"
-    - cron: "15 22 * * 0"
+    # 한국 표준시간 매주 월요일 오전 06:00 (KST, UTC+9)
+    - cron: "0 6 * * 1"
+      timezone: "Asia/Seoul"
   workflow_dispatch:
     inputs:
       automatic:
