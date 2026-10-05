@@ -1,8 +1,8 @@
 {
-  "slug": "2026-10-05",
+  "slug": "2026-10-06",
   "page": "daily.html",
   "unresolved": [],
-  "cutoff": "2026-10-02",
+  "cutoff": "2026-10-05",
   "stale": [],
   "delayed": [],
   "collected": [
@@ -27,8 +27,5 @@
     "vix",
     "wti"
   ],
-  "brief_issues": [
-    "정리문장 1이 50자로 김 (45자 제한)",
-    "정리문장 2이 46자로 김 (45자 제한)"
-  ]
+  "brief_issues": []
 }
