@@ -1,8 +1,8 @@
 {
-  "slug": "2026-10-22",
+  "slug": "2026-10-24",
   "page": "daily.html",
   "unresolved": [],
-  "cutoff": "2026-10-21",
+  "cutoff": "2026-10-23",
   "stale": [],
   "delayed": [],
   "collected": [
@@ -27,7 +27,5 @@
     "vix",
     "wti"
   ],
-  "brief_issues": [
-    "정리문장 3이 50자로 김 (45자 제한)"
-  ]
+  "brief_issues": []
 }
