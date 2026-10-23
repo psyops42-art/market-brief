@@ -5,17 +5,17 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-import types
 import unittest
 from contextlib import redirect_stdout
 from unittest import mock
 
 import pandas as pd
 
-# No market API calls or yfinance initialization during regression tests.
-with mock.patch.dict(sys.modules, {"yfinance": types.ModuleType("yfinance"),
-                                  "requests": types.ModuleType("requests")}):
-    import fetch_data
+# Import normally so pandas/calendar classes retain a single module identity.
+# Restoring a patch.dict(sys.modules) removes transitive imports and can leave
+# stale holiday classes behind (rejected by pandas 3.1 CustomBusinessDay).
+# External calls are mocked at their use sites in the tests below.
+import fetch_data
 from pipeline_utils import morning_cutoff, validate_daily_dates
 from market_dates import expected_close
 
