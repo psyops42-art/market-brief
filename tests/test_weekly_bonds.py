@@ -1,11 +1,9 @@
 import datetime as dt
-import sys
-import types
 import unittest
 from unittest import mock
 
-with mock.patch.dict(sys.modules, {"yfinance": types.ModuleType("yfinance")}):
-    import fetch_data_weekly as weekly
+# Keep transitive pandas/calendar imports registered; mock provider calls below.
+import fetch_data_weekly as weekly
 import render_weekly
 
 
