@@ -1,5 +1,5 @@
 {
-  "slug": "2026-10-24",
+  "slug": "2026-10-26",
   "page": "daily.html",
   "unresolved": [],
   "cutoff": "2026-10-23",
@@ -27,5 +27,7 @@
     "vix",
     "wti"
   ],
-  "brief_issues": []
+  "brief_issues": [
+    "정리문장 3이 46자로 김 (45자 제한)"
+  ]
 }
