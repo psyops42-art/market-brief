@@ -192,20 +192,35 @@ def build_mvp(series):
             '      </div>')
 
 
+MAX_CHECKPOINTS = 4
+
+
+def pick_checkpoints(items, limit=MAX_CHECKPOINTS):
+    """중요 일정만 남긴다: 강조(highlight) 일정을 먼저 채우고, 화면에는 원래 날짜 순서로 보여준다."""
+    items = list(items)
+    if len(items) <= limit:
+        return items
+    order = sorted(range(len(items)), key=lambda i: (not items[i].get("highlight"), i))[:limit]
+    return [items[i] for i in sorted(order)]
+
+
 def build_calendar(brief):
-    """날짜는 항상 굵게(일관성), 중요한 일정은 요일까지 강조색으로 구분."""
+    """이번주 체크포인트: 중요 일정 3~4개만 큰 글씨 카드로. 강조 일정은 'KEY' 배지와 색으로 구분."""
     rows = []
-    for c in brief.get("checkpoints", []):
-        wd_class = "wd today" if c.get("highlight") else "wd"
+    for c in pick_checkpoints(brief.get("checkpoints", [])):
+        hl = bool(c.get("highlight"))
+        day = html.escape(str(c.get("day", "")))
         date_txt = html.escape(str(c.get("date", "")))
-        body = safe_html(c.get("text"))
-        if c.get("highlight"):
-            body = f'<b>{body}</b>'
-        rows.append(f'        <div class="d"><div class="{wd_class}">{html.escape(str(c.get("day","")))}</div>'
-                    f'<div class="ev"><b>{date_txt}</b> {body}</div></div>')
+        why = safe_html(c.get("why")) if c.get("why") else ""
+        rows.append(
+            f'        <div class="d{" key" if hl else ""}">'
+            f'<div class="wd"><span class="dw">{day}</span><span class="dt">{date_txt}</span></div>'
+            f'<div class="ev"><div class="et">{"<em>KEY</em>" if hl else ""}{safe_html(c.get("text"))}</div>'
+            + (f'<div class="ew">{why}</div>' if why else "")
+            + '</div></div>')
     if not rows:
-        rows.append(f'        <div class="d"><div class="wd">{EMPTY}</div>'
-                    '<div class="ev">확인필요 — 일정 미생성</div></div>')
+        rows.append(f'        <div class="d"><div class="wd"><span class="dw">{EMPTY}</span></div>'
+                    '<div class="ev"><div class="et">확인필요 — 일정 미생성</div></div></div>')
     return '      <div class="cal">\n' + "\n".join(rows) + '\n      </div>'
 
 
@@ -219,6 +234,7 @@ def main():
     ap.add_argument("--base", required=True)
     ap.add_argument("--out", default="out")
     args = ap.parse_args()
+    args.base = args.base.rstrip("/")
 
     with open(args.data, encoding="utf-8") as fp:
         data = json.load(fp)
@@ -318,6 +334,11 @@ def main():
         fp.write(out_html)
     print(f"  · 대시보드 → {path}")
 
+    # Keep the dated archive and update the fixed sharing URL on every run.
+    stable_html = out_html.replace(f"{args.base}/{slug}.html", f"{args.base}/weekly.html")
+    with open(os.path.join(args.out, "weekly.html"), "w", encoding="utf-8") as fp:
+        fp.write(stable_html)
+
     # ── OG 썸네일 : 제목·주간 지표·회고를 전체 폭으로 배치 ──
     og_ok, og_error = False, ""
     try:
@@ -348,7 +369,7 @@ def main():
                    "ktb3y", "ktb10y", "ust10y", "ust30y",
                    "usdkrw", "gold", "wti", "btc"] if k not in S]
     report = {
-        "slug": slug, "last_week": lw, "this_week": tw,
+        "slug": slug, "page": "weekly.html", "last_week": lw, "this_week": tw,
         "unresolved": unresolved,
         "stale": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in stale_set if k in S],
         "delayed": [f'{S[k]["label"]}({fmt_date(S[k]["asof"])})' for k in delayed_set if k in S],

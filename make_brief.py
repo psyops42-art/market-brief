@@ -23,6 +23,7 @@ from collections import Counter
 
 import requests
 from requests.exceptions import RequestException
+import plain_language
 from pipeline_utils import atomic_write_json, has_disallowed_markup, validate_daily_dates
 from urllib.parse import urlsplit
 from news_sources import fetch_news_sources
@@ -46,6 +47,13 @@ SYSTEM = """당신은 퇴직연금 담당자를 위한 데일리 마켓 브리�
 · 글로벌 자산배분 기반. Core = TDF(30~50%), Satellite = ETF(30~70%)
 · 이 전략은 시장 국면과 무관하게 일관되게 유지한다는 것이 메시지의 축이다.
 
+[독자 — 반드시 지킬 것]
+· 독자는 투자 초보인 40~50대 퇴직연금 가입자다. 휴대폰으로 30초 안에 훑어본다.
+· 중학생도 이해할 쉬운 말로 쓴다. 전문용어(스프레드, bp, 컨센서스, 탈동조화, 자본지출 등)는
+  피하고, 꼭 필요하면 괄호로 한 번 풀어 쓴다. 예: "국채 금리(나라가 빌리는 돈의 이자)".
+· 한 문장에는 한 가지 내용만 담는다. 한 문장은 40자 안팎으로 짧게.
+· 숫자는 꼭 필요한 것 1~2개만 쓴다.
+
 [톤]
 · 사실 → 해석 순서. 해석이 사실보다 앞서지 않는다.
 · 단정적 전망 금지. "~할 것이다" 대신 "~할 가능성이 있다 / ~로 해석된다".
@@ -57,18 +65,18 @@ SYSTEM = """당신은 퇴직연금 담당자를 위한 데일리 마켓 브리�
 · body/quotes 안에서는 <b> 태그로만 강조할 수 있다. 다른 HTML 태그는 쓰지 않는다."""
 
 SCHEMA = """{
-  "og_description": "링크 미리보기용 2문장 요약. 핵심 수치 포함. 120자 이내",
+  "og_description": "링크 미리보기용 2문장 요약. 쉬운 말, 핵심 수치 1개. 100자 이내",
   "headlines": [
-    {"title": "25자 내외 제목", "body": "2~3문장 설명", "source": "매체명 · M/D", "sources": [{"name": "매체명", "url": "검색으로 확인한 원문 https URL", "published_at": "원문에서 확인한 ISO8601 발행시각(시간대 포함)"}]}
+    {"title": "20자 이내 제목. 제목만 읽어도 무슨 일인지 알 수 있게", "body": "쉬운 말 1~2문장, 70자 이내 요약", "source": "매체명 · M/D", "sources": [{"name": "매체명", "url": "검색으로 확인한 원문 https URL", "published_at": "원문에서 확인한 ISO8601 발행시각(시간대 포함)"}]}
   ],
-  "checkpoint": {"title": "국내 이슈 또는 주간 정리 제목", "body": "2~3문장", "source": "매체명 · M/D", "sources": [{"name": "매체명", "url": "검색으로 확인한 원문 https URL", "published_at": "원문에서 확인한 ISO8601 발행시각(시간대 포함)"}]},
+  "checkpoint": {"title": "20자 이내 국내 이슈 제목", "body": "쉬운 말 1~2문장, 70자 이내 요약", "source": "매체명 · M/D", "sources": [{"name": "매체명", "url": "검색으로 확인한 원문 https URL", "published_at": "원문에서 확인한 ISO8601 발행시각(시간대 포함)"}]},
   "mindset": [
-    {"title": "소제목", "body": "2~3문장"}
+    {"title": "20자 이내 소제목", "body": "쉬운 말 2문장, 90자 이내"}
   ],
-  "quotes": ["담당자가 고객에게 그대로 읽어줄 수 있는 짧은 문장 3개. 각 45자 이내. 핵심 어구 1~2개를 <b>로 강조"],
-  "oneline_market": "오늘 시장을 한 문장으로",
-  "oneline_pension": "퇴직연금 관점 한 문장",
-  "next_events": "다음 체크포인트를 · 로 구분해 한 줄"
+  "quotes": ["담당자가 고객에게 그대로 읽어줄 수 있는 짧은 문장 3개. 각 35자 이내. 핵심 어구 1~2개를 <b>로 강조"],
+  "oneline_market": "오늘 시장을 쉬운 말 한 문장(40자 이내)으로",
+  "oneline_pension": "퇴직연금 가입자가 할 일을 쉬운 말 한 문장(40자 이내)으로",
+  "next_events": "가장 중요한 다음 일정 2~3개만 · 로 구분해 한 줄. 쉬운 말"
 }"""
 
 
@@ -352,9 +360,9 @@ def generate_fresh_brief(prompt: str, key: str, today: dt.date, asof=None, evide
             "source": "일반 투자 원칙", "sources": [], "status": "unavailable"},
         "og_description": "주요 시장지표와 최근 경제 보도를 바탕으로 자산배분 원칙을 점검합니다.",
         "mindset": [
-            {"title": "뉴스와 자산배분", "body": "개별 보도의 단기 영향과 장기 투자계획을 구분하고, 주식·채권·현금 비중을 함께 점검합니다."},
-            {"title": "Core와 Satellite", "body": "TDF와 ETF의 역할 및 기존 자산배분 비중을 점검합니다."},
-            {"title": "장기투자 원칙", "body": "투자기간과 위험 감수 수준을 바탕으로 분산 원칙을 점검합니다."},
+            {"title": "뉴스보다 내 계획이 먼저", "body": "하루 뉴스에 흔들리기보다 <b>내 투자 기간</b>을 먼저 떠올려 보세요. 주식·채권 비중은 그대로인지 확인하면 충분합니다."},
+            {"title": "TDF는 중심, ETF는 보조", "body": "TDF(알아서 비중을 조절하는 펀드)가 중심을 잡고, ETF는 일부만 담습니다. <b>역할을 나누는 것</b>이 기본입니다."},
+            {"title": "오래, 나눠서 투자하기", "body": "여러 자산에 나눠 담고 <b>꾸준히 납입</b>하는 것이 장기투자의 기본입니다."},
         ],
         "quotes": ["시장 변화는 <b>자산배분 관점</b>에서 볼 대상입니다.",
                    "TDF와 ETF는 <b>역할 구분</b>이 먼저입니다.",
@@ -420,23 +428,29 @@ def main():
    미국 휴장일은 미국 종가에만 적용하며 국내·유럽·아시아 뉴스 검색일을 과거로 돌리지 않는다.
 1. 최근 보도 중 퇴직연금 자산배분에 중요한 글로벌 금융시장 뉴스 3건을 고른다.
    주식·금리·환율·원자재 등 서로 다른 축으로 선정한다.
+   제목이 중심이다. 제목만 읽어도 이해되게 쓰고, 본문은 제목을 보충하는
+   쉬운 요약 1~2문장(70자 이내)으로 끝낸다.
 2. 같은 뉴스 기간의 국내 이슈 1건을 checkpoint로 넣는다. 오래된 연금·국채 제도 소개로 채우지 않는다.
    적합한 국내 보도가 없으면 같은 기간의 글로벌 후속 보도에 근거한 국내 투자자 시사점을
    '투자 코멘트'로 작성하고 그 최신 원문을 출처로 붙인다.
 3. MINDSET 3개를 쓴다. 2번은 반드시 Core(TDF)-Satellite(ETF) 역할 분담을 다룬다.
-   1번은 그날의 시장 국면을 자산배분 언어로 해석하고, 3번은 장기투자 원칙을 다룬다.
+   1번은 그날의 시장 국면을 쉬운 말로 풀어 주고, 3번은 장기투자 원칙을 다룬다.
+   각 MINDSET은 쉬운 말 2문장(90자 이내)으로 쓴다.
 4. 정리문장 3줄을 쓴다. 상담 현장에서 그대로 읽는 문장이므로 아래를 지킨다.
-   - 한 문장당 45자 이내. 두 문장으로 늘이지 않는다.
+   - 한 문장당 35자 안팎(최대 45자). 두 문장으로 늘이지 않는다.
    - 각 문장의 핵심 어구 1~2개를 <b>태그로 감싼다. 문장 전체를 감싸지 않는다.
    - 설명이 아니라 결론을 쓴다. "~입니다"로 끝나는 단정적 조언 형태.
    - 예시 형식: 오늘 오른 자산을 쫓기보다 <b>비중을 원래대로</b> 돌리는 것이 먼저입니다.
-5. 오늘의 한 줄(시장/연금)과 다음 체크포인트를 작성한다.
+5. 오늘의 한 줄(시장/연금)을 각각 쉬운 말 한 문장으로 쓰고, 다음 체크포인트는 가장 중요한 일정 2~3개만 쓴다.
 
 아래 스키마의 JSON만 출력한다.
 {SCHEMA}"""
 
     print("[생성] Claude API 호출 (웹검색 포함)...")
     brief = generate_fresh_brief(prompt, key, today, asof=news_end, evidence=evidence)
+    # 헤드라인·투자마인드를 초보 독자용 쉬운 말로 한 번 더 다듬는다 (출처·날짜는 그대로).
+    brief["_readability"] = plain_language.simplify(brief, "daily", key, MODEL)
+    brief["_readability_left"] = plain_language.readability_issues(brief, "daily")
     issues = brief.get("_news_issues", []) + validate(brief, data.get("cutoff"), today, asof=news_end)
     brief["_news_window"] = {"start": news_start.isoformat(), "end": news_end.isoformat()}
     brief["_issues"] = issues
@@ -446,6 +460,10 @@ def main():
     for h in brief.get("headlines", []):
         if isinstance(h, dict):
             print(f"    - {str(h.get('title', ''))[:40]}  ({h.get('source', '-')})")
+    for note in brief["_readability"]:
+        print(f"  · {note}")
+    for left in brief["_readability_left"]:
+        print(f"  · 참고(쉬운 말): {left}")
     if issues:
         print("  ! 점검 사항:")
         for i in issues:

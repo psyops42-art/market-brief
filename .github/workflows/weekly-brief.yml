@@ -60,6 +60,9 @@ jobs:
       - name: 파이썬 패키지 설치
         run: pip install --quiet -r requirements.txt
 
+      - name: 순수 로직 회귀 테스트
+        run: python -m unittest discover -s tests -v
+
       - name: 렌더링 도구 설치
         timeout-minutes: 6
         run: bash scripts/install-render-tools.sh
@@ -112,7 +115,7 @@ jobs:
           git commit \
             -m "주간 브리핑 $SLUG 자동 배포" \
             -m "▼ 카톡에 붙여넣을 링크" \
-            -m "$PAGES_BASE/$SLUG.html" \
+            -m "$PAGES_BASE/weekly.html" \
             -m "아카이브 : $PAGES_BASE/"
 
           echo "▶ 푸시"
@@ -129,7 +132,7 @@ jobs:
             echo "!! 푸시 실패 — 원격 상태와 권한(contents: write)을 확인하세요"
             exit 1
           fi
-          echo "▶ 배포 완료 : $PAGES_BASE/$SLUG.html"
+          echo "▶ 배포 완료 : $PAGES_BASE/weekly.html"
 
       - name: 5단계 · 알림 (이슈 + 메일)
         if: success()
@@ -173,7 +176,7 @@ jobs:
                     f"**이번주** {tw.get('mon')} ~ {tw.get('fri')}\n")
           print("| 항목 | 링크 |")
           print("|---|---|")
-          print(f"| 공유 링크 | {base}/{slug}.html?v={ver} |")
+          print(f"| 공유 링크 | {base}/weekly.html?v={ver} |")
           print(f"| 썸네일 | {base}/og-{slug}.png?v={ver} |")
           print(f"| 아카이브 | {base}/ |\n")
           print("> 카톡에는 `?v=` 없이 `.html` 까지만 붙여넣으세요. 위 링크는 캐시를 피해 확인용입니다.\n")

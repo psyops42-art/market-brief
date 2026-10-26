@@ -40,6 +40,8 @@ class ScheduleGuardTests(unittest.TestCase):
             self.assertTrue(self.decide("weekly", stamp, docs))
             (docs / "report_weekly.json").write_text(json.dumps({"slug": "weekly-2026-09-28"}))
             (docs / "weekly-2026-09-28.html").write_text("published")
+            self.assertTrue(self.decide("weekly", stamp, docs))
+            (docs / "weekly.html").write_text("published")
             self.assertFalse(self.decide("weekly", stamp, docs))
             self.assertFalse(self.decide("weekly", "2026-09-29T06:15:00+09:00", docs))
             self.assertTrue(self.decide("daily", "2026-09-28T07:20:00+09:00", docs))

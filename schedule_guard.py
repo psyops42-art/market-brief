@@ -24,7 +24,9 @@ def should_run(kind, now, docs):
     except (OSError, ValueError):
         published = {}
     required = [docs / f"{slug}.html"]
-    if not weekly:
+    if weekly:
+        required += [docs / "weekly.html"]
+    else:
         required += [docs / "daily.html", docs / f"og-{slug}.png"]
     if published.get("slug") == slug and all(p.is_file() and p.stat().st_size for p in required):
         return False, f"{slug} 이미 배포됨 — 중복 생성·알림 생략"

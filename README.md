@@ -76,7 +76,7 @@ cd market-brief
 아래 파일을 저장소 루트에 놓습니다.
 ```
 fetch_data.py  make_brief.py  render.py  make_og.py  build_index.py
-pipeline_utils.py
+pipeline_utils.py  plain_language.py
 template.html
 .github/workflows/daily-brief.yml
 ```
@@ -223,6 +223,10 @@ Yahoo 일별 이력이 늦으면 범위 조회로 재확인합니다. 그래도 
 Public 저장소에 키가 커밋되면 즉시 유출됩니다.
 
 데일리 고정 공유 주소: https://psyops42-art.github.io/market-brief/daily.html
+
+주간 고정 공유 주소: https://psyops42-art.github.io/market-brief/weekly.html
+
+주간 브리핑도 날짜별 HTML을 아카이브에 보관하면서 `weekly.html`을 최신 주간판으로 갱신합니다.
 매일 같은 파일을 최신 브리핑으로 교체합니다. 날짜별 파일은 아카이브에 보관하고,
 알림·실행 요약은 고정 주소를 사용합니다. GitHub 예약 실행은 지연될 수 있습니다.
 

@@ -35,13 +35,13 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 .band .wk{font-size:10.5px;font-weight:900;color:#fff;background:rgba(255,255,255,.22);
   border:1px solid rgba(255,255,255,.5);border-radius:6px;padding:3px 8px;letter-spacing:.3px}
 .band h1{font-size:26px;font-weight:900;color:#fff;letter-spacing:-1.2px;margin-top:3px}
-.band .date{font-size:12.5px;color:rgba(255,255,255,.94);margin-top:6px;letter-spacing:-.3px}
+.band .date{font-size:14px;color:rgba(255,255,255,.94);margin-top:6px;letter-spacing:-.3px}
 
 /* ── 탭 메뉴 ── */
 .tabs{position:sticky;top:0;z-index:50;display:flex;background:rgba(244,246,244,.96);
   backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid #DFE4E0;padding:7px 10px;gap:7px}
 .tabs button{flex:1;border:none;background:#EAEDEA;color:#78818a;font-family:inherit;
-  font-size:12.5px;font-weight:800;letter-spacing:-.4px;padding:10px 0;border-radius:10px;cursor:pointer}
+  font-size:13.5px;font-weight:800;letter-spacing:-.6px;padding:11px 0;border-radius:10px;cursor:pointer;white-space:nowrap}
 .tabs button .no{display:inline-block;width:16px;height:16px;line-height:16px;border-radius:5px;
   background:#C9CFC9;color:#fff;font-size:10.5px;margin-right:4px;vertical-align:1px}
 .tabs button.on{background:linear-gradient(95deg,#A99BE0,#8FBBDD 55%,#63D3B2);color:#fff}
@@ -65,11 +65,11 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 .asof{text-align:right;font-size:11px;color:#8a939a;margin:0 2px 5px 0}
 
 /* ── 뉴스/리뷰 카드 ── */
-.news{background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:14px 15px;margin-bottom:9px}
-.news .h{font-size:15px;font-weight:800;letter-spacing:-.7px;line-height:1.4;color:#1d2226}
-.news .h em{font-style:normal;color:#7C6BD0;font-weight:900;margin-right:4px}
-.news .d{font-size:12.5px;color:#5a636b;margin-top:7px;line-height:1.6;letter-spacing:-.3px}
-.news .s{font-size:11px;color:#a0a9b0;margin-top:6px}
+.news{background:#fff;border:1px solid #E3E7E3;border-radius:14px;padding:17px 17px;margin-bottom:11px}
+.news .h{font-size:20px;font-weight:900;letter-spacing:-.8px;line-height:1.38;color:#1d2226}
+.news .h em{font-style:normal;color:#7C6BD0;font-weight:900;margin-right:5px}
+.news .d{font-size:16px;color:#4a5259;margin-top:9px;line-height:1.6;letter-spacing:-.4px}
+.news .s{font-size:12.5px;color:#9aa3aa;margin-top:8px}
 
 /* ── 지표 테이블 (주간형) ── */
 .tbl{background:#fff;border:1px solid #E3E7E3;border-radius:13px;overflow:hidden;margin-bottom:16px}
@@ -93,24 +93,24 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 .up{color:#E03B32}.dn{color:#2668C4}.fl{color:#98a1a8}
 
 /* ── 마인드셋 카드 ── */
-.mind{background:#fff;border:1px solid #E3E7E3;border-radius:13px;padding:13px 15px;margin-bottom:9px}
-.mind .n{font-size:10.5px;font-weight:900;color:#3FB99A;letter-spacing:1.2px}
-.mind .t{font-size:14.5px;font-weight:800;letter-spacing:-.6px;margin-top:3px;color:#1d2226}
-.mind .b{font-size:12.5px;color:#5a636b;line-height:1.65;margin-top:6px;letter-spacing:-.3px}
+.mind{background:#fff;border:1px solid #E3E7E3;border-radius:14px;padding:16px 17px;margin-bottom:11px}
+.mind .n{font-size:12px;font-weight:900;color:#3FB99A;letter-spacing:1.2px}
+.mind .t{font-size:19px;font-weight:900;letter-spacing:-.7px;margin-top:5px;line-height:1.4;color:#1d2226}
+.mind .b{font-size:16px;color:#4a5259;line-height:1.65;margin-top:8px;letter-spacing:-.4px}
 .mind b{color:#2b2f33}
 .cs{display:flex;align-items:center;margin-top:11px}
 .cs .box{flex:1;border-radius:10px;padding:9px 0;text-align:center;color:#fff}
-.cs .box .l{font-size:10.5px;font-weight:700;opacity:.93}
-.cs .box .v{font-size:14.5px;font-weight:900;letter-spacing:-.5px;margin-top:1px}
+.cs .box .l{font-size:12.5px;font-weight:700;opacity:.93}
+.cs .box .v{font-size:17px;font-weight:900;letter-spacing:-.5px;margin-top:1px}
 .cs .core{background:#4FCFA5}.cs .sat{background:#8FA8D8}
 .cs .plus{margin:0 9px;font-size:18px;font-weight:900;color:#A9B2B9}
 
 /* ── 이주의 투자교육 (주간 전용 · 앰버 톤으로 의도적 구분) ── */
 .edu{background:#FFFBF3;border:1.5px solid #F0D9A8;border-radius:13px;padding:15px 16px;margin-bottom:9px}
-.edu .tag{display:inline-block;font-size:10px;font-weight:900;color:#fff;background:#D69A3E;
+.edu .tag{display:inline-block;font-size:12px;font-weight:900;color:#fff;background:#D69A3E;
   border-radius:6px;padding:3px 8px;letter-spacing:.3px}
-.edu .t{font-size:15px;font-weight:800;letter-spacing:-.6px;margin-top:9px;color:#5A4315}
-.edu .b{font-size:12.5px;color:#6b5a3a;line-height:1.7;margin-top:7px;letter-spacing:-.3px}
+.edu .t{font-size:19px;font-weight:900;letter-spacing:-.7px;margin-top:10px;line-height:1.4;color:#5A4315}
+.edu .b{font-size:16px;color:#6b5a3a;line-height:1.7;margin-top:8px;letter-spacing:-.4px}
 .edu b{color:#8a5a12}
 
 /* ── 지난주 성적표 (베스트/워스트) ── */
@@ -118,28 +118,40 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 .mvp .c{flex:1;border-radius:13px;padding:13px 14px;color:#fff}
 .mvp .best{background:linear-gradient(135deg,#E85A50,#D6473E)}
 .mvp .worst{background:linear-gradient(135deg,#4A7FC9,#3968B0)}
-.mvp .lb{font-size:10.5px;font-weight:800;opacity:.85}
-.mvp .nm2{font-size:13.5px;font-weight:900;margin-top:6px;letter-spacing:-.4px}
-.mvp .vv{font-size:20px;font-weight:900;margin-top:2px;letter-spacing:-.7px}
+.mvp .lb{font-size:12.5px;font-weight:800;opacity:.88}
+.mvp .nm2{font-size:16px;font-weight:900;margin-top:6px;letter-spacing:-.5px}
+.mvp .vv{font-size:24px;font-weight:900;margin-top:2px;letter-spacing:-.7px}
 
-/* ── 이번주 일정(요일별) ── */
-.cal{background:#fff;border:1px solid #E3E7E3;border-radius:13px;overflow:hidden;margin-bottom:16px}
-.cal .d{display:flex;padding:11px 14px;border-top:1px solid #EDF0ED;align-items:baseline}
+/* ── 이번주 체크포인트 (중요 일정 3~4개만) ── */
+.cal{background:#fff;border:1px solid #E3E7E3;border-radius:14px;overflow:hidden;margin-bottom:16px}
+.cal .d{display:flex;padding:15px 16px;border-top:1px solid #EDF0ED;align-items:flex-start}
 .cal .d:first-child{border-top:none}
-.cal .wd{width:34px;flex:none;font-size:12px;font-weight:900;color:#78818a}
-.cal .wd.today{color:#6B57C4}
-.cal .ev{flex:1;font-size:12.5px;color:#33383d;letter-spacing:-.3px;line-height:1.5}
-.cal .ev b{color:#1d2226;font-weight:800}
+.cal .d.key{background:#F8F6FE}
+.cal .wd{width:54px;flex:none;text-align:center;border-radius:10px;background:#EEF1EE;padding:6px 0;margin-right:13px}
+.cal .wd .dw{display:block;font-size:17px;font-weight:900;color:#5a636b;line-height:1.2}
+.cal .wd .dt{display:block;font-size:12.5px;font-weight:700;color:#8a939a;margin-top:1px}
+.cal .d.key .wd{background:linear-gradient(135deg,#A99BE0,#8FBBDD)}
+.cal .d.key .wd .dw,.cal .d.key .wd .dt{color:#fff}
+.cal .ev{flex:1;min-width:0}
+.cal .et{font-size:17.5px;font-weight:800;color:#1d2226;letter-spacing:-.6px;line-height:1.42}
+.cal .et em{font-style:normal;display:inline-block;font-size:11px;font-weight:900;color:#fff;background:#7C6BD0;
+  border-radius:5px;padding:2px 6px;margin-right:6px;vertical-align:3px;letter-spacing:.3px}
+.cal .ew{font-size:15px;color:#5a636b;margin-top:5px;line-height:1.55;letter-spacing:-.4px}
 
 /* ── 인용 박스 ── */
 .quote{background:#F6F3FD;border:1.5px solid #CDC1F1;border-radius:13px;padding:14px 15px;margin-top:11px}
-.quote .qh{font-size:12px;font-weight:900;color:#6B57C4;margin-bottom:9px}
-.quote p{font-size:12.5px;line-height:1.65;color:#33383d;padding-left:15px;position:relative;margin-bottom:8px;letter-spacing:-.3px}
+.quote .qh{font-size:14px;font-weight:900;color:#6B57C4;margin-bottom:10px}
+.quote p{font-size:16px;line-height:1.6;color:#33383d;padding-left:18px;position:relative;margin-bottom:10px;letter-spacing:-.4px}
 .quote p:last-child{margin-bottom:0}
-.quote p:before{content:"\201C";position:absolute;left:0;top:0;color:#9C88DF;font-size:16px;font-weight:900;line-height:1.2}
+.quote p:before{content:"\201C";position:absolute;left:0;top:0;color:#9C88DF;font-size:19px;font-weight:900;line-height:1.2}
 .quote b{color:#5B45B8}
 
 .note{margin-top:14px;font-size:10.5px;color:#8a939a;line-height:1.75;letter-spacing:-.2px}
+#p1 .sec h2,#p2 .sec h2{font-size:19px}
+#p1,#p2{word-break:keep-all;overflow-wrap:anywhere}
+#p1 .sec .ck,#p2 .sec .ck{width:21px;height:21px;line-height:17px;font-size:13px}
+#p1 .sec2 span{font-size:17px}
+#p1 .note,#p2 .note{font-size:12px}
 
 .foot{display:flex;align-items:center;justify-content:space-between;
   padding:14px 2px calc(20px + env(safe-area-inset-bottom)) 2px;margin-top:6px;border-top:1px solid #E3E7E3}
@@ -165,9 +177,9 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 
 @media (min-width:430px){
   .band h1{font-size:29px}
-  .news .h{font-size:16px}.news .d{font-size:13px}
-  .mind .t{font-size:15.5px}.mind .b{font-size:13px}
-  .quote p{font-size:13px}
+  .news .h{font-size:21px}.news .d{font-size:16.5px}
+  .mind .t{font-size:20px}.mind .b{font-size:16.5px}
+  .quote p{font-size:16.5px}
 }
 </style>
 </head>
@@ -241,6 +253,8 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
       <div class="quote">
         <div class="qh">그대로 쓰는 정리 문장</div>
 {{QUOTES}}
+      </div>
+
       <div class="note">
         ※ 본 자료는 시장 정보 제공을 목적으로 작성되었으며, 특정 상품의 매매를 권유하지 않습니다.<br>
         ※ 실적배당형 상품의 수익률은 과거 실적으로 미래 수익을 보장하지 않으며, 운용실적에 따라 원금손실이 발생할 수 있습니다.

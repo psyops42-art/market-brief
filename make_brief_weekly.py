@@ -30,11 +30,13 @@ import time
 
 import requests
 from requests.exceptions import RequestException
+import plain_language
 from pipeline_utils import atomic_write_json, has_disallowed_markup, md_date_in_range
 
 KST = dt.timezone(dt.timedelta(hours=9))
 API = "https://api.anthropic.com/v1/messages"
 MODEL = "claude-sonnet-4-6"
+MAX_CHECKPOINTS = 4   # 이번주 체크포인트는 중요 일정만 보여준다
 
 # ── 이주의 투자교육 : 검증된 원고 로테이션 (LLM이 매번 새로 쓰지 않음) ──
 EDU_LESSONS = [
@@ -152,12 +154,19 @@ SYSTEM = """당신은 퇴직연금 담당자를 위한 주간 마켓 브리핑�
 [투자 전제 — 매일/매주 동일]
 · 글로벌 자산배분 기반. Core = TDF(30~50%), Satellite = ETF(30~70%)
 
+[독자 — 반드시 지킬 것]
+· 독자는 투자 초보인 40~50대 퇴직연금 가입자다. 휴대폰으로 30초 안에 훑어본다.
+· 중학생도 이해할 쉬운 말로 쓴다. 전문용어(스프레드, bp, 컨센서스, 탈동조화, 자본지출 등)는
+  피하고, 꼭 필요하면 괄호로 한 번 풀어 쓴다. 예: "국채 금리(나라가 빌리는 돈의 이자)".
+· 한 문장에는 한 가지 내용만 담는다. 한 문장은 40자 안팎으로 짧게.
+· 숫자는 꼭 필요한 것 1~2개만 쓴다.
+
 [톤]
 · 사실 → 해석 순서. 단정적 전망 금지. 특정 상품 매수 권유 금지.
-· 문장은 짧고 담백하게.
+· 문장은 짧고 담백하게. "~입니다/~습니다" 존댓말로 통일한다.
 
 [정리 문장 규격]
-· 3개, 각 45자 이내. 핵심 어구 1~2개만 <b>로 강조 (문장 전체 강조 금지).
+· 3개, 각 35자 이내. 핵심 어구 1~2개만 <b>로 강조 (문장 전체 강조 금지).
 · 설명이 아니라 결론을 쓴다.
 
 [출력]
@@ -165,16 +174,16 @@ SYSTEM = """당신은 퇴직연금 담당자를 위한 주간 마켓 브리핑�
 · body/quotes 안에서는 <b> 태그로만 강조할 수 있다."""
 
 SCHEMA = """{
-  "og_description": "링크 미리보기용 2문장 요약. 핵심 수치 포함. 120자 이내",
+  "og_description": "링크 미리보기용 2문장 요약. 쉬운 말, 핵심 수치 1개. 100자 이내",
   "last_week_headlines": [
-    {"title": "25자 내외 제목", "body": "2~3문장, 한 주 전체를 관통하는 서술", "source": "매체명 · M/D"}
+    {"title": "20자 이내 제목. 제목만 읽어도 무슨 일인지 알 수 있게", "body": "쉬운 말 1~2문장, 70자 이내 요약", "source": "매체명 · M/D"}
   ],
-  "retrospective": {"title": "회고 소제목", "body": "2~3문장. 원칙이 왜 유효했는지"},
+  "retrospective": {"title": "20자 이내 소제목", "body": "쉬운 말 2문장, 90자 이내. 원칙이 왜 유효했는지"},
   "checkpoints": [
-    {"day": "월|화|수|목|금", "date": "M/D", "text": "일정 내용", "highlight": true 또는 false}
+    {"day": "월|화|수|목|금", "date": "M/D", "text": "25자 이내 핵심 일정 1개", "why": "왜 중요한지 쉬운 말 한 문장, 35자 이내", "highlight": true 또는 false}
   ],
-  "mindset_01": {"title": "이번주 시장 관전 포인트 소제목", "body": "2~3문장"},
-  "quotes": ["45자 이내 정리문장 3개, 각 <b> 강조 포함"],
+  "mindset_01": {"title": "20자 이내 소제목", "body": "쉬운 말 2문장, 90자 이내"},
+  "quotes": ["35자 이내 정리문장 3개, 각 <b> 강조 포함"],
   "next_week_note": "다음 주 이후 참고할 만한 한 줄"
 }"""
 
@@ -248,14 +257,13 @@ def quarter_end_note(ref: dt.date) -> dict:
         q_end = dt.date(ref.year, q_end_month + 1, 1) - dt.timedelta(days=1)
     d = (q_end - ref).days
     if d <= 30:
-        body = (f"{q_end.month}월 {q_end.day}일 분기 마감이 {d}일 앞으로 다가왔습니다. "
-                "Core-Satellite 비중이 목표 범위(±5%p)를 벗어난 고객이 있다면, "
-                "이번 주 상담에서 리밸런싱을 함께 짚어보시기 좋습니다.")
-        title = "분기 리밸런싱을 점검할 시점입니다"
+        body = (f"{q_end.month}월 {q_end.day}일 분기 마감까지 {d}일 남았습니다. "
+                "처음 정한 투자 비중에서 <b>5%p 넘게 벗어났다면</b> 비중을 다시 맞춰 보세요.")
+        title = "분기 마감 전, 투자 비중 점검하기"
     else:
-        body = (f"다음 분기 마감({q_end.month}월 {q_end.day}일)까지는 아직 여유가 있습니다. "
-                "다만 이번 주 큰 변동이 있었다면 목표 비중 이탈 여부를 가볍게 확인해두면 좋습니다.")
-        title = "리밸런싱은 캘린더가 아니라 이탈 폭으로 판단합니다"
+        body = (f"다음 분기 마감({q_end.month}월 {q_end.day}일)까지는 여유가 있습니다. "
+                "날짜보다 <b>처음 정한 비중에서 얼마나 벗어났는지</b>를 보고 판단하세요.")
+        title = "비중 조정은 날짜보다 '벗어난 정도'로"
     return {"title": title, "body": body, "days_left": d, "quarter_end": q_end.isoformat()}
 
 
@@ -290,8 +298,11 @@ def validate(brief: dict, last_week: dict, this_week: dict) -> list:
             issues.append(f"체크포인트 날짜({m.group(0)})가 이번주 범위({tm}~{tf}) 밖")
         elif c.get("day") != day_names[d.weekday()]:
             issues.append(f"체크포인트 {m.group(0)}의 요일({c.get('day', '-')})이 실제 요일과 다름")
-        if has_disallowed_markup(c.get("text", "")):
+        if has_disallowed_markup(c.get("text", "")) or has_disallowed_markup(c.get("why", "")):
             issues.append(f"체크포인트 {m.group(0)}에 허용되지 않은 HTML 태그가 있음")
+
+    if len(checkpoints) > MAX_CHECKPOINTS:
+        issues.append(f"체크포인트가 {len(checkpoints)}건 — 중요 일정 {MAX_CHECKPOINTS}건만 표시")
 
     quotes = brief.get("quotes", [])
     if len(quotes) != 3:
@@ -299,7 +310,7 @@ def validate(brief: dict, last_week: dict, this_week: dict) -> list:
     for i, q in enumerate(quotes, 1):
         plain = re.sub(r"<[^>]+>", "", q)
         if len(plain) > 45:
-            issues.append(f"정리문장 {i}이 {len(plain)}자로 김 (45자 제한)")
+            issues.append(f"정리문장 {i}이 {len(plain)}자로 김 (45자 제한, 권장 35자)")
         if "<b>" not in q:
             issues.append(f"정리문장 {i}에 <b> 강조 없음")
         if has_disallowed_markup(q):
@@ -330,12 +341,15 @@ def main():
 [할 일]
 1. 웹검색으로 [지난주 기간] 동안의 글로벌 금융시장 흐름을 확인하고, 퇴직연금
    자산배분에 영향이 있었던 사건 3가지를 고른다. 하루 뉴스가 아니라 "그 주에
-   어떤 흐름이 있었는지"로 서술한다.
+   어떤 흐름이 있었는지"로 쓰되, 제목이 중심이다. 제목만 읽어도 이해되게 쓰고,
+   본문은 제목을 보충하는 쉬운 요약 1~2문장(70자 이내)으로 끝낸다.
 2. retrospective: 그 주의 이벤트들에도 불구하고 왜 원칙을 유지하는 것이 유효했는지
-   위 [수집 데이터]의 실제 주간 등락 수치를 근거로 짧게 회고한다.
-3. checkpoints: [이번주 기간] 월~금 요일별로 예정된 주요 지표·이벤트를 웹검색으로
-   확인해 정리한다. 특히 중요한 날은 highlight를 true로 표시한다.
-4. mindset_01: 이번 주 시장에서 특히 주목해야 할 변수 하나를 짚는다.
+   위 [수집 데이터]의 실제 주간 등락 수치 1~2개를 근거로 쉬운 말 2문장으로 회고한다.
+3. checkpoints: [이번주 기간] 일정을 웹검색으로 확인한 뒤, 퇴직연금 가입자에게
+   가장 중요한 일정만 3~4개 고른다(요일별 전부 나열 금지, 하루에 여러 개면 가장 큰 것 1개).
+   각 항목은 text(25자 이내)와 why(왜 중요한지 쉬운 말 한 문장)로 쓴다.
+   그중 가장 중요한 1~2개만 highlight를 true로 표시한다.
+4. mindset_01: 이번 주 시장에서 특히 주목해야 할 변수 하나를 쉬운 말 2문장으로 짚는다.
 5. 정리문장 3개를 규격에 맞게 쓴다.
 6. next_week_note: 다음 주 이후 참고할 만한 이벤트를 한 줄로.
 
@@ -344,6 +358,9 @@ def main():
 
     print("[생성] Claude API 호출 (웹검색 포함)...")
     brief = parse_json(call_api(prompt, key))
+    # 헤드라인·회고·투자마인드를 초보 독자용 쉬운 말로 한 번 더 다듬는다 (출처·날짜는 그대로).
+    brief["_readability"] = plain_language.simplify(brief, "weekly", key, MODEL)
+    brief["_readability_left"] = plain_language.readability_issues(brief, "weekly")
 
     # 이 두 항목은 LLM이 아니라 코드가 확정한다 (교육 콘텐츠 안정성 · 날짜 계산 정확성)
     brief["education"] = pick_education(ref)
@@ -358,6 +375,10 @@ def main():
           f"· 체크포인트 {len(brief.get('checkpoints', []))}건")
     print(f"  · 이주의 투자교육: {brief['education']['title']}")
     print(f"  · 리밸런싱 안내: D-{brief['rebalance_note']['days_left']}")
+    for note in brief["_readability"]:
+        print(f"  · {note}")
+    for left in brief["_readability_left"]:
+        print(f"  · 참고(쉬운 말): {left}")
     if issues:
         print("  ! 점검 사항:")
         for i in issues:

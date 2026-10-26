@@ -108,6 +108,21 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("X: -", make_brief.summarize(daily))
         self.assertIn("주간 -", make_brief_weekly.summarize(weekly))
 
+    def test_weekly_calendar_keeps_only_key_events_in_date_order(self):
+        brief = {"checkpoints": [
+            {"day": "월", "date": "10/26", "text": "일정A", "highlight": False},
+            {"day": "화", "date": "10/27", "text": "일정B", "highlight": False},
+            {"day": "수", "date": "10/28", "text": "FOMC", "why": "금리 방향", "highlight": True},
+            {"day": "목", "date": "10/29", "text": "GDP", "highlight": True},
+            {"day": "금", "date": "10/30", "text": "일정E", "highlight": False},
+        ]}
+        html = render_weekly.build_calendar(brief)
+        self.assertEqual(html.count('<div class="d'), 4)
+        self.assertNotIn("일정E", html)
+        self.assertLess(html.index("일정A"), html.index("FOMC"))
+        self.assertIn('class="ew">금리 방향', html)
+        self.assertEqual(html.count("<em>KEY</em>"), 2)
+
     def test_weekly_row_accepts_partial_metric(self):
         row = render_weekly.row_html(
             "x", {"label": "X", "badge": "", "unit": "price", "value": None,
@@ -359,10 +374,10 @@ class NewsFreshnessTests(unittest.TestCase):
 
 
 class RenderSmokeTests(unittest.TestCase):
-    def test_notifications_share_stable_daily_url_and_keep_weekly_url(self):
+    def test_notifications_share_stable_daily_and_weekly_urls(self):
         import notify
         for slug, page, expected in (("2026-09-23", "daily.html", "daily.html"),
-                                     ("weekly-2026-09-21", None, "weekly-2026-09-21.html")):
+                                     ("weekly-2026-09-21", "weekly.html", "weekly.html")):
             subject, body, link = notify.compose({"slug": slug, "page": page}, "https://example.test", "42")
             self.assertEqual(link, "https://example.test/" + expected)
             self.assertIn(link, body)
@@ -436,7 +451,10 @@ class RenderSmokeTests(unittest.TestCase):
                 render_weekly.main()
             output = (out_path / "weekly-2026-08-31.html").read_text(encoding="utf-8")
             self.assertNotIn("{{", output)
-            self.assertTrue((out_path / "report_weekly.json").exists())
+            stable = (out_path / "weekly.html").read_text(encoding="utf-8")
+            self.assertIn('content="https://example.test/x/weekly.html"', stable)
+            report = json.loads((out_path / "report_weekly.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["page"], "weekly.html")
 
 
 if __name__ == "__main__":
