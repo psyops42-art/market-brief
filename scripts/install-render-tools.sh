@@ -1,55 +1,43 @@
 #!/usr/bin/env bash
-# Run on the disposable Ubuntu Actions runner; do not change its APT sources.
+# The OG thumbnail uses Pillow, so only Korean fonts are needed.
 set -euo pipefail
 
-render_tools_ready() {
-  command -v wkhtmltoimage >/dev/null &&
-    [[ -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc ]] &&
-    [[ -f /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc ]]
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+font_dir="${repo_root}/assets/fonts"
+font_ref="e7db6ca603fd4862010383ff17ffd6cc4ffac1c0"
+font_base="https://raw.githubusercontent.com/google/fonts/${font_ref}/ofl/nanumgothic"
+
+download_font() {
+  local name="$1" expected="$2" target="${font_dir}/$1" tmp
+  if [[ -f "$target" ]] && printf '%s  %s\n' "$expected" "$target" | sha256sum -c --status; then
+    return 0
+  fi
+  tmp="$(mktemp "${target}.XXXXXX")"
+  if ! curl --fail --location --silent --show-error --retry 1 --retry-all-errors \
+      --connect-timeout 10 --max-time 45 --output "$tmp" "${font_base}/${name}"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! printf '%s  %s\n' "$expected" "$tmp" | sha256sum -c --status; then
+    rm -f "$tmp"
+    echo "::error::Font checksum mismatch: ${name}"
+    return 1
+  fi
+  mv "$tmp" "$target"
 }
 
 install_render_tools() {
-  local -a apt_options=(
-    -o Acquire::Retries=1
-    -o Acquire::http::Timeout=20
-    -o Acquire::https::Timeout=20
-    -o DPkg::Lock::Timeout=30
-    -o Dpkg::Use-Pty=0
-  )
-  if render_tools_ready; then
-    echo 'Rendering tools already installed; skipping APT.'
+  if [[ -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc &&
+        -f /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc ]]; then
+    echo 'System Noto CJK fonts are ready; no download needed.'
     return 0
   fi
-
-  echo 'Installing wkhtmltopdf and regular/bold CJK fonts using cached package lists (120s limit).'
-  if ! timeout --kill-after=10s 120s sudo env DEBIAN_FRONTEND=noninteractive \
-      apt-get "${apt_options[@]}" install -y --no-install-recommends wkhtmltopdf fonts-noto-cjk; then
-    echo '::warning::Initial install failed; refreshing package lists once (90s limit).'
-    # Runner images include unrelated third-party package repositories. Only
-    # refresh Ubuntu sources when the standard source file is available.
-    local -a source_options=()
-    if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
-      source_options=(-o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=-)
-    elif [[ -f /etc/apt/sources.list ]]; then
-      source_options=(-o Dir::Etc::sourcelist=/etc/apt/sources.list -o Dir::Etc::sourceparts=-)
-    fi
-    if ! timeout --kill-after=10s 90s sudo env DEBIAN_FRONTEND=noninteractive \
-        apt-get "${apt_options[@]}" "${source_options[@]}" update; then
-      echo '::error::Package-list refresh failed or timed out. See repository/network errors above.'
-      return 1
-    fi
-    echo 'Retrying rendering package installation once (120s limit).'
-    if ! timeout --kill-after=10s 120s sudo env DEBIAN_FRONTEND=noninteractive \
-        apt-get "${apt_options[@]}" install -y --no-install-recommends wkhtmltopdf fonts-noto-cjk; then
-      echo '::error::Rendering package installation failed or timed out.'
-      return 1
-    fi
-  fi
-  if ! render_tools_ready; then
-    echo '::error::wkhtmltoimage or the required regular/bold CJK font files are missing.'
-    return 1
-  fi
-  echo 'Rendering tools and Korean fonts are ready.'
+  mkdir -p "$font_dir"
+  download_font NanumGothic-Regular.ttf \
+    76f45ef4a6bcff344c837c95a7dcc26e017e38b5846d5ae0cdcb5b86be2e2d31
+  download_font NanumGothic-Bold.ttf \
+    f96298f9fb18e364d2370f4c3ce948ac67a2b61af992d7234bc15c42b033c674
+  echo 'Korean fonts are ready for Pillow thumbnails.'
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

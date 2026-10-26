@@ -22,7 +22,10 @@ UP, DN, FL = (224, 59, 50), (38, 104, 196), (120, 129, 138)
 
 
 def font(size, bold=False):
+    bundled = os.path.join(os.path.dirname(__file__), "assets", "fonts",
+                           f"NanumGothic-{'Bold' if bold else 'Regular'}.ttf")
     for path in (f"/usr/share/fonts/opentype/noto/NotoSansCJK-{'Bold' if bold else 'Regular'}.ttc",
+                 bundled,
                  'C:/Windows/Fonts/malgunbd.ttf' if bold else 'C:/Windows/Fonts/malgun.ttf'):
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
