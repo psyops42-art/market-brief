@@ -152,34 +152,35 @@ class NewsFreshnessTests(unittest.TestCase):
 
     def test_format_failure_retries_then_accepts_valid_response(self):
         responses = iter(['{"headlines": [', json.dumps(self.fresh_brief())])
-        def api(prompt, key, source_urls):
+        def api(prompt, key, source_urls, **kwargs):
             source_urls.update(self.urls())
             return next(responses)
         with mock.patch.object(make_brief, "call_api", side_effect=api) as call, redirect_stdout(io.StringIO()):
             result = make_brief.generate_fresh_brief("prompt", "test", self.day)
         self.assertEqual(result, self.fresh_brief())
         self.assertEqual(call.call_count, 2)
+        self.assertFalse(call.call_args.kwargs["search"])
 
     def test_final_malformed_response_keeps_prior_valid_cards_and_uses_rss(self):
         draft = self.fresh_brief()
         draft["checkpoint"]["sources"][0]["published_at"] = "2026-08-01T00:00:00+09:00"
         evidence = {"https://example.test/rss": {"url": "https://example.test/rss",
-                    "name": "매체", "published_at": "2026-09-07T06:00:00+09:00",
-                    "title": "경제 뉴스", "summary": "확인된 기사 요약"}}
+                    "name": "연합뉴스", "published_at": "2026-09-07T06:00:00+09:00",
+                    "title": "한은 금리 동결", "summary": "확인된 기사 요약"}}
         responses = iter([json.dumps(draft), 'not JSON', '{"headlines": ['])
-        def api(prompt, key, source_urls):
+        def api(prompt, key, source_urls, **kwargs):
             source_urls.update(self.urls())
             return next(responses)
         with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
             result = make_brief.generate_fresh_brief("prompt", "test", self.day, evidence=evidence)
         self.assertEqual(result["headlines"], draft["headlines"])
-        self.assertEqual(result["checkpoint"]["title"], "경제 뉴스")
+        self.assertEqual(result["checkpoint"]["title"], "한은 금리 동결")
         self.assertEqual(make_brief.news_issues(result, self.day, self.urls() | set(evidence)), [])
-        self.assertIn("경제 뉴스", render.build_news(result))
+        self.assertIn("한은 금리 동결", render.build_news(result))
 
     def fresh_brief(self):
         def item(i):
-            return {"title": "새로운 보도", "body": "최신 기사에 근거한 설명",
+            return {"title": ["미국 주식시장 실적 전망", "유럽 중앙은행 금리 인하", "원유 공급 감소에 유가 상승", "한국은행 기준금리 동결"][i], "body": "최신 기사에 근거한 설명",
                     "source": "매체 · 9/7", "sources": [{"name": "매체",
                     "url": f"https://example.test/news/{i}",
                     "published_at": "2026-09-07T06:00:00+09:00"}]}
@@ -253,7 +254,7 @@ class NewsFreshnessTests(unittest.TestCase):
         bad = self.fresh_brief()
         bad["checkpoint"]["sources"][0]["published_at"] = "2026-08-27T06:00:00+09:00"
         responses = iter([bad, self.fresh_brief()])
-        def api(prompt, key, source_urls):
+        def api(prompt, key, source_urls, **kwargs):
             source_urls.update(self.urls())
             return json.dumps(next(responses))
         with mock.patch.object(make_brief, "call_api", side_effect=api) as call, redirect_stdout(io.StringIO()):
@@ -269,14 +270,14 @@ class NewsFreshnessTests(unittest.TestCase):
             data.write_text(json.dumps({"briefing_date": "2026-09-07", "cutoff": "2026-09-04",
                                         "series": {}}), encoding="utf-8")
             with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test"}), \
-                    mock.patch.object(sys, "argv", ["make_brief.py", "--data", str(data), "--out", str(out)]), \
+                    mock.patch.object(sys, "argv", ["make_brief.py", "--worker", "--data", str(data), "--out", str(out)]), \
                     mock.patch.object(make_brief, "call_api", return_value=json.dumps(self.fresh_brief())) as call, \
                     mock.patch.object(make_brief, "fetch_news_sources", return_value={}), \
                     redirect_stdout(io.StringIO()):
                 make_brief.main()  # No evidence: omit unsupported claims after retries.
             self.assertEqual(call.call_count, 3)
             result = json.loads(out.read_text(encoding="utf-8"))
-            self.assertEqual(result["_news_status"], "partial")
+            self.assertEqual(result["_news_status"], "failed")
             self.assertTrue(result["_issues"])
             html = render.build_news(result)
             self.assertNotIn("미확보", html)
@@ -301,7 +302,7 @@ class NewsFreshnessTests(unittest.TestCase):
             bad[key] = "오래된 국채 매입 뉴스"
         bad["mindset"][0]["body"] = "오래된 국채 매입 뉴스"
         bad["quotes"][0] = "오래된 국채 매입 뉴스"
-        def api(prompt, key, source_urls):
+        def api(prompt, key, source_urls, **kwargs):
             source_urls.update(self.urls())
             return json.dumps(bad)
         with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
@@ -315,8 +316,8 @@ class NewsFreshnessTests(unittest.TestCase):
         for card in bad["headlines"] + [bad["checkpoint"]]:
             card["sources"][0]["published_at"] = "2026-08-01T00:00:00+09:00"
         evidence = {f"https://example.test/rss/{i}": {
-            "url": f"https://example.test/rss/{i}", "title": f"경제 시장 보도 {i}",
-            "summary": "언론사가 제공한 기사 요약", "name": "매체",
+            "url": f"https://example.test/rss/{i}", "title": ["Stocks rally on earnings outlook", "ECB interest rate cut decision", "Oil surge on supply forecast", "한은 금리 동결"][i],
+            "summary": "언론사가 제공한 기사 요약", "name": "CNBC" if i < 3 else "연합뉴스",
             "published_at": "2026-09-04T08:00:00+09:00"} for i in range(4)}
         with mock.patch.object(make_brief, "call_api", return_value=json.dumps(bad)) as api, \
                 redirect_stdout(io.StringIO()):
@@ -331,7 +332,7 @@ class NewsFreshnessTests(unittest.TestCase):
     def test_display_is_derived_from_original_publication_without_relabeling(self):
         bad = self.fresh_brief()
         bad["checkpoint"]["source"] = "매체 · 8/27"
-        def api(prompt, key, source_urls):
+        def api(prompt, key, source_urls, **kwargs):
             source_urls.update(self.urls())
             return json.dumps(bad)
         with mock.patch.object(make_brief, "call_api", side_effect=api), redirect_stdout(io.StringIO()):
