@@ -46,7 +46,7 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,6 +78,15 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python make_brief_weekly.py --data data_weekly.json --out brief_weekly.json
 
+      - name: 2-1단계 · 1분 브리핑 영상 (실패해도 대시보드는 계속)
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
+        run: |
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; }
+          python video_weekly.py --data data_weekly.json --brief brief_weekly.json --out out
+
       - name: 3단계 · 렌더링 (대시보드 + 화면캡처 썸네일)
         run: |
           python render_weekly.py \
@@ -100,6 +109,15 @@ jobs:
             echo "!! 썸네일 PNG 없음 — 3단계 로그의 'OG 썸네일 생성 실패'를 확인하세요 (배포는 계속)"
           fi
           cp out/report_weekly.json docs/report_weekly.json
+
+          # 1분 영상: 대시보드가 상대경로(video/…)로 참조. 최근 8주치만 남긴다.
+          if ls out/video/weekly-*.mp4 >/dev/null 2>&1; then
+            mkdir -p docs/video
+            cp out/video/weekly-*.mp4 out/video/weekly-*.jpg docs/video/
+            python -c "import video_weekly as v; r=v.prune('docs/video', 8); print('   오래된 영상 정리:', r or '없음')"
+          else
+            echo "   1분 영상 없음 — 대시보드만 배포합니다"
+          fi
 
           echo "▶ 아카이브 목록 생성"
           python build_index.py --base "$PAGES_BASE"
@@ -147,6 +165,19 @@ jobs:
             --base "$PAGES_BASE" --run "${{ github.run_number }}" \
             --label "주간 마켓 브리핑"
 
+      - name: 6단계 · 카톡 나에게 보내기 (대시보드 + 1분 영상)
+        if: success()
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          python kakao_send.py --report out/report_weekly.json --brief brief_weekly.json \
+            --base "$PAGES_BASE" --run "${{ github.run_number }}"
+
       - name: 결과 요약
         if: always()
         run: |
@@ -186,6 +217,27 @@ jobs:
           print("\n".join(f"- {x}" for x in stale) if stale else "- 없음")
           print("\n**생성 내용 자체 점검 (헤드라인·일정 날짜범위)**")
           print("\n".join(f"- {x}" for x in issues) if issues else "- 통과")
+          vid = rep.get("video") or {}
+          print("\n**1분 영상**")
+          if vid.get("ok"):
+              voice = vid.get("voice") or "음성 없음(배경음악만)"
+              print(f"- {base}/weekly.html#video · {vid.get('duration')}초 · {voice}")
+              if vid.get("tts_error"):
+                  print(f"- 음성 생성 실패: {vid['tts_error']}")
+          else:
+              print(f"- 생성 안 됨: {vid.get('error') or '2-1단계 로그 확인'}")
+          kk = {}
+          if os.path.exists("out/kakao_report.json"):
+              kk = json.load(open("out/kakao_report.json", encoding="utf-8"))
+          print("\n**카톡 나에게 보내기**")
+          if kk.get("sent"):
+              print("- 발송 완료 — 카톡 '나와의 채팅'에서 확인 후 [전달]")
+          elif kk.get("skipped"):
+              print(f"- 건너뜀: {kk['skipped']}")
+          else:
+              print(f"- 실패: {kk.get('error') or '실행되지 않음'}")
+          if kk.get("token_rotated"):
+              print(f"- 카카오 리프레시 토큰: {kk['token_rotated']}")
           print("\n**썸네일(카톡 미리보기)**")
           print("- 정상 생성" if rep.get("og_ok") else f"- 생성 실패: {rep.get('og_error','원인 미기록')}")
           if delayed:
@@ -204,4 +256,5 @@ jobs:
             brief_weekly.json
             out/
             docs/report_weekly.json
+            !out/video/*.mp4
           retention-days: 7

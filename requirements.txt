@@ -2,3 +2,4 @@ yfinance>=0.2.40
 requests>=2.31
 pillow>=10.0
 pandas_market_calendars>=5.4,<6
+numpy>=1.26

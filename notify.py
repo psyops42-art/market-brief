@@ -57,6 +57,16 @@ def compose(rep, base, run, label="마켓 브리핑"):
         "",
         f"아카이브 : {base}/",
     ]
+    video = rep.get("video")
+    if video is not None:
+        if video.get("ok"):
+            lines += ["", "▼ 1분 영상 (대시보드 1번 탭 맨 위에 들어가 있습니다)",
+                      f"영상 바로 열기 : {link}#video",
+                      f"mp4 직접 받기 : {base}/{video.get('file')}"]
+            if video.get("tts_error"):
+                lines += [f"  ※ 음성 없이 배경음악만 들어갔습니다 — {video['tts_error']}"]
+        else:
+            lines += ["", f"■ 1분 영상 생성 실패 (대시보드는 정상 배포) — {video.get('error') or '원인 미기록'}"]
     if unresolved:
         lines += ["", "■ 화면에 '확인필요'로 표기된 항목 — 발송 전 직접 확인하세요",
                   *[f"  · {x}" for x in unresolved]]

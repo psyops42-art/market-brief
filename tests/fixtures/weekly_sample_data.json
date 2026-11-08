@@ -1,0 +1,134 @@
+{
+ "last_week": {
+  "mon": "2026-10-26",
+  "fri": "2026-10-30"
+ },
+ "this_week": {
+  "mon": "2026-11-02",
+  "fri": "2026-11-06"
+ },
+ "series": {
+  "sp500": {
+   "label": "S&P 500",
+   "badge": "us",
+   "value": 7580.07,
+   "wow_pct": -0.57,
+   "ytd_pct": 10.52,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "ndx": {
+   "label": "나스닥 100",
+   "badge": "us",
+   "value": 28384.85,
+   "wow_pct": -1.98,
+   "ytd_pct": 12.61,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "kospi": {
+   "label": "코스피",
+   "badge": "kr",
+   "value": 5730.74,
+   "wow_pct": 3.25,
+   "ytd_pct": 32.98,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "shcomp": {
+   "label": "상해종합",
+   "badge": "cn",
+   "value": 3599.02,
+   "wow_pct": -2.48,
+   "ytd_pct": -10.55,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "sx5e": {
+   "label": "유로스톡스 50",
+   "badge": "eu",
+   "value": 6131.31,
+   "wow_pct": 1.04,
+   "ytd_pct": 3.5,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "ktb3y": {
+   "label": "국고채 3년",
+   "badge": "kr",
+   "value": 3.715,
+   "wow_pct": -8.8,
+   "ytd_pct": 78.0,
+   "unit": "bp",
+   "asof": "2026-10-30",
+   "src": "한국은행 ECOS"
+  },
+  "ktb10y": {
+   "label": "국고채 10년",
+   "badge": "kr",
+   "value": 4.008,
+   "wow_pct": -8.9,
+   "ytd_pct": 62.2,
+   "unit": "bp",
+   "asof": "2026-10-30",
+   "src": "한국은행 ECOS"
+  },
+  "ust10y": {
+   "label": "미국채 10년",
+   "badge": "us",
+   "value": 4.93,
+   "wow_pct": -5.8,
+   "ytd_pct": 74.3,
+   "unit": "bp",
+   "asof": "2026-10-30"
+  },
+  "ust30y": {
+   "label": "미국채 30년",
+   "badge": "us",
+   "value": 5.31,
+   "wow_pct": -0.5,
+   "ytd_pct": 44.6,
+   "unit": "bp",
+   "asof": "2026-10-30"
+  },
+  "usdkrw": {
+   "label": "달러/원",
+   "badge": "fx",
+   "value": 1337.98,
+   "wow_pct": 0.9,
+   "ytd_pct": -7.32,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "gold": {
+   "label": "국제금",
+   "badge": "cm",
+   "value": 3898.9,
+   "wow_pct": -2.72,
+   "ytd_pct": -9.95,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "wti": {
+   "label": "유가 WTI",
+   "badge": "cm",
+   "value": 104.12,
+   "wow_pct": 0.82,
+   "ytd_pct": 81.65,
+   "unit": "price",
+   "asof": "2026-10-30"
+  },
+  "btc": {
+   "label": "비트코인",
+   "badge": "cr",
+   "value": 77198.21,
+   "wow_pct": -4.78,
+   "ytd_pct": -13.0,
+   "unit": "price",
+   "asof": "2026-10-30"
+  }
+ },
+ "stale": [],
+ "delayed": [],
+ "missing": []
+}

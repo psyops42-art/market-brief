@@ -224,6 +224,33 @@ def build_calendar(brief):
     return '      <div class="cal">\n' + "\n".join(rows) + '\n      </div>'
 
 
+# ─────────────────────────────── 1분 영상 카드
+
+def build_video_card(slug, video_dir, report=None):
+    """영상이 만들어졌을 때만 1번 탭 맨 위에 '1분 영상 브리핑' 카드를 넣는다.
+    재생은 카드를 누르면 열리는 전체화면 오버레이에서 (카톡 내장 브라우저는 소리 있는 자동재생을 막는다).
+    파일 경로는 상대경로라 weekly.html 과 날짜별 아카이브 페이지 모두에서 같은 파일을 가리킨다.
+    보관기간(8주)이 지나 영상이 지워진 옛 아카이브 페이지에서는 카드가 스스로 숨는다."""
+    mp4 = os.path.join(video_dir, f"{slug}.mp4")
+    if not os.path.exists(mp4):
+        return ""
+    sec = (report or {}).get("duration")
+    meta = f"약 {round(sec)}초 · 소리를 켜고 보세요" if sec else "소리를 켜고 보세요"
+    return (
+        f'      <div class="vcard" id="video" role="button" tabindex="0" onclick="openVid()">\n'
+        f'        <div class="vth"><img src="video/{slug}.jpg" alt="" '
+        f'onerror="document.getElementById(\'video\').style.display=\'none\'"><span class="pl"></span></div>\n'
+        '        <div class="vtx"><div class="vk">▶ 1분 영상 브리핑</div>'
+        '<div class="vt">지난주 시장과 이번 주 일정을<br>영상으로 먼저 보세요</div>'
+        f'<div class="vm">{meta}</div></div>\n'
+        '      </div>\n'
+        '      <div class="vov" id="vov" onclick="if(event.target===this)closeVid()">\n'
+        '        <button class="vx" onclick="closeVid()" aria-label="닫기">✕</button>\n'
+        f'        <video id="vplayer" controls playsinline preload="none" poster="video/{slug}.jpg">'
+        f'<source src="video/{slug}.mp4" type="video/mp4"></video>\n'
+        '      </div>')
+
+
 # ─────────────────────────────── 메인
 
 def main():
@@ -233,8 +260,10 @@ def main():
     ap.add_argument("--template", default="template_weekly.html")
     ap.add_argument("--base", required=True)
     ap.add_argument("--out", default="out")
+    ap.add_argument("--video-dir", default=None, help="1분 영상 폴더 (기본: <out>/video)")
     args = ap.parse_args()
     args.base = args.base.rstrip("/")
+    video_dir = args.video_dir or os.path.join(args.out, "video")
 
     with open(args.data, encoding="utf-8") as fp:
         data = json.load(fp)
@@ -262,6 +291,14 @@ def main():
     equity = build_table(S, ["sp500", "ndx", "kospi", "shcomp", "sx5e"], stale_set, delayed_set)
     rates = build_table(S, ["ktb3y", "ktb10y", "ust10y", "ust30y"], stale_set, delayed_set)
     fx = build_table(S, ["usdkrw", "gold", "wti", "btc"], stale_set, delayed_set)
+
+    video_rep = {}
+    vr_path = os.path.join(args.out, "video_report.json")
+    if os.path.exists(vr_path):
+        with open(vr_path, encoding="utf-8") as fp:
+            video_rep = json.load(fp)
+    video_card = build_video_card(slug, video_dir, video_rep)
+    has_video = bool(video_card)
 
     news = build_news(brief)
     mvp = build_mvp(S)
@@ -313,6 +350,7 @@ def main():
                 .replace("{{OG_URL}}", f"{args.base}/{slug}.html")
                 .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png?v=summary2")
                 .replace("{{DATE_LINE}}", date_line)
+                .replace("{{VIDEO_CARD}}", video_card)
                 .replace("{{LAST_WEEK_NEWS}}", news)
                 .replace("{{MVP_CARD}}", mvp)
                 .replace("{{RETRO_CARD}}", retro_card)
@@ -357,6 +395,13 @@ def main():
                              brief.get("retrospective", {}).get("body", ""))
         print(f"  · OG 썸네일 → {png}")
         og_ok = True
+        if has_video:
+            try:
+                import video_weekly
+                video_weekly.add_play_badge(png)
+                print("  · OG 썸네일에 ▶ 1분 영상 배지 추가")
+            except Exception as exc:                             # noqa: BLE001
+                print(f"  ! 영상 배지 추가 실패(썸네일은 그대로 사용): {exc}")
     except Exception as exc:                                     # noqa: BLE001
         og_ok = False
         og_error = f"{type(exc).__name__}: {exc}"
@@ -376,6 +421,11 @@ def main():
         "brief_issues": brief_issues,
         "og_ok": og_ok,
         "og_error": og_error,
+        "video": {"ok": has_video, "file": f"video/{slug}.mp4" if has_video else "",
+                  "poster": f"video/{slug}.jpg" if has_video else "",
+                  "duration": video_rep.get("duration"), "voice": video_rep.get("voice"),
+                  "tts_error": video_rep.get("tts_error", ""),
+                  "error": video_rep.get("error", "") if not has_video else ""},
         "collected": sorted(S.keys()),
     }
     with open(os.path.join(args.out, "report_weekly.json"), "w", encoding="utf-8") as fp:
@@ -395,6 +445,11 @@ def main():
             print(f"      - {i}")
     if not og_ok:
         print(f"  ! OG 썸네일 없음: {og_error}")
+    if has_video:
+        print(f"  · 1분 영상: video/{slug}.mp4 ({video_rep.get('duration', '?')}초, "
+              f"목소리 {video_rep.get('voice') or '없음'})")
+    else:
+        print(f"  · 1분 영상 없음 — 대시보드만 배포합니다 {video_rep.get('error', '')}")
 
 
 if __name__ == "__main__":
