@@ -1,8 +1,8 @@
 {
-  "slug": "2026-11-10",
+  "slug": "2026-11-11",
   "page": "daily.html",
   "unresolved": [],
-  "cutoff": "2026-11-09",
+  "cutoff": "2026-11-10",
   "stale": [],
   "delayed": [],
   "collected": [
@@ -27,5 +27,7 @@
     "vix",
     "wti"
   ],
-  "brief_issues": []
+  "brief_issues": [
+    "정리문장 1이 46자로 김 (45자 제한)"
+  ]
 }
