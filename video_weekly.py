@@ -40,6 +40,7 @@ TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 TTS_VOICES = ["ko-KR-Chirp3-HD-Kore", "ko-KR-Neural2-A"]
 TTS_RATE = 1.1
 LEAD, TAIL = 0.45, 0.55          # 장면 시작 후 말 시작까지 / 말 끝난 뒤 여유
+END_TAIL = 1.8                   # 마지막 장면: 말이 다 끝난 뒤 영상이 끝날 때까지 여유
 TARGET_SEC = 72                  # 원고가 이보다 길면 보조 문장부터 뺀다
 CHARS_PER_SEC = 7.0              # 1.1배속 Chirp3 실측 근사치
 
@@ -632,7 +633,8 @@ def build_scenes(data, brief):
 
     # 원고가 너무 길면 헤드라인 본문 문장부터 덜어낸다
     def est(sc):
-        return sum(max(x.base_dur, LEAD + len(speakable(x.narration)) / CHARS_PER_SEC + TAIL) for x in sc)
+        return sum(max(x.base_dur, LEAD + len(speakable(x.narration)) / CHARS_PER_SEC
+                       + (END_TAIL if x is sc[-1] else TAIL)) for x in sc)
     # 줄이는 순서: 투자마인드 → 회고 → 헤드라인 3 → 2 → 1 (뒤에 나오는 보조 문장부터)
     order = [x for x in reversed(scenes) if getattr(x, "narr_short", None)]
     order.sort(key=lambda x: 0 if x in scenes[1:1 + len(heads)] else -1)
@@ -682,6 +684,19 @@ def synth_all(scenes, key, workdir):
             last = f"{voice}: {exc}"
             print(f"  ! TTS 실패 → 다음 목소리 시도 ({last})")
     raise RuntimeError(last)
+
+
+def to_wav(src, dst):
+    """MP3 → WAV(44.1kHz 스테레오). MP3 헤더의 길이는 추정치일 수 있어, 풀어서 정확한 길이를 잰다."""
+    subprocess.check_call(["ffmpeg", "-y", "-loglevel", "error", "-i", src,
+                           "-ar", "44100", "-ac", "2", "-c:a", "pcm_s16le", dst])
+    return dst
+
+
+def stream_dur(p, sel):
+    out = subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", sel,
+                                   "-show_entries", "stream=duration", "-of", "csv=p=0", p]).decode().strip()
+    return float(out.splitlines()[0]) if out and out.splitlines()[0] not in ("", "N/A") else 0.0
 
 
 def media_dur(p):
@@ -828,10 +843,16 @@ def make_video(data, brief, out_dir, slug, tts_key=None, jobs=None):
             report["tts_error"] = "GOOGLE_TTS_API_KEY 없음"
             print("  · GOOGLE_TTS_API_KEY 가 없어 배경음악 버전으로 만듭니다.")
 
+        if voice_paths:
+            voice_paths = [to_wav(p, p[:-4] + ".wav") for p in voice_paths]
         vd = [media_dur(p) for p in voice_paths] if voice_paths else [0] * len(scenes)
-        durs = [round(max(sc.base_dur, (LEAD + v + TAIL) if v else 0) * FPS) / FPS
-                for sc, v in zip(scenes, vd)]
+        last = len(scenes) - 1
+        # 프레임 단위로 올림 → 장면이 말보다 짧아지는 일이 없게
+        durs = [math.ceil(max(sc.base_dur, (LEAD + v + (END_TAIL if i == last else TAIL)) if v else 0)
+                          * FPS - 1e-6) / FPS
+                for i, (sc, v) in enumerate(zip(scenes, vd))]
         total = sum(durs)
+        voice_end = (sum(durs[:last]) + LEAD + vd[last]) if voice_paths else 0.0
         report["duration"] = round(total, 1)
         report["narration"] = [speakable(sc.narration) for sc in scenes]
         print(f"  · 장면 {len(scenes)}개 · 총 {total:.1f}초 · 목소리 {report['voice'] or '없음'}")
@@ -843,11 +864,21 @@ def make_video(data, brief, out_dir, slug, tts_key=None, jobs=None):
         with ProcessPoolExecutor(jobs) as ex:
             list(ex.map(_render_range, [(data, brief, g, durs, work) for g in groups if g]))
 
-        with open(os.path.join(work, "list.txt"), "w") as fp:
-            fp.write("".join(f"file 's{i:02d}.mp4'\n" for i in range(len(scenes))))
+        # 장면 이어붙이기: concat 필터로 프레임을 하나도 빠짐없이 순서대로 잇는다.
+        # (예전의 concat demuxer + 스트림 복사는 실행 환경에 따라 장면 경계마다 프레임이 빠져
+        #  영상이 계획보다 1초 가량 짧아졌고, -shortest 때문에 마지막 말이 잘렸다)
+        # 혹시 모자라면 마지막 화면을 늘려서라도 정확히 total 초로 맞춘다.
         vpath = os.path.join(work, "v.mp4")
-        subprocess.check_call(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
-                               "-i", os.path.join(work, "list.txt"), "-c", "copy", vpath])
+        cat = ["ffmpeg", "-y", "-loglevel", "error"]
+        for i in range(len(scenes)):
+            cat += ["-i", os.path.join(work, f"s{i:02d}.mp4")]
+        n = len(scenes)
+        cat += ["-filter_complex",
+                "".join(f"[{i}:v]" for i in range(n)) + f"concat=n={n}:v=1:a=0,"
+                "tpad=stop_mode=clone:stop_duration=3[v]",
+                "-map", "[v]", "-t", f"{total:.3f}", "-r", str(FPS), "-c:v", "libx264", "-crf", "23",
+                "-preset", "veryfast", "-pix_fmt", "yuv420p", vpath]
+        subprocess.check_call(cat)
         mpath = os.path.join(work, "music.wav")
         make_music(durs, mpath)
 
@@ -870,8 +901,18 @@ def make_video(data, brief, out_dir, slug, tts_key=None, jobs=None):
             cmd += ["-filter_complex", ";".join(filt), "-map", "0:v", "-map", "[a]"]
         else:
             cmd += ["-map", "0:v", "-map", "1:a", "-af", "volume=-4dB"]
-        cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", tmp_final]
+        # -shortest 대신 길이를 직접 지정: 소리를 영상 길이에 맞춰 자르지 않는다
+        cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-t", f"{total:.3f}",
+                "-movflags", "+faststart", tmp_final]
         subprocess.check_call(cmd)
+        # 자체 점검: 영상·소리 모두 마지막 말이 끝난 뒤까지 이어지는지
+        vlen, alen = stream_dur(tmp_final, "v:0"), stream_dur(tmp_final, "a:0")
+        report["video_len"], report["audio_len"] = round(vlen, 2), round(alen, 2)
+        if voice_paths:
+            report["voice_end"] = round(voice_end, 2)
+            need = voice_end + 0.5
+            if vlen < need or alen < need:
+                raise RuntimeError(f"마지막 말이 잘림 — 말 끝 {voice_end:.2f}초, 영상 {vlen:.2f}초, 소리 {alen:.2f}초")
         os.replace(tmp_final, final)
 
         # 포스터(재생 전 표시 이미지): 첫 장면 2초 지점
