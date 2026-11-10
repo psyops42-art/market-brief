@@ -103,7 +103,7 @@ def build_template(rep, brief, base, run):
             "image_width": 1200, "image_height": 630,
             "link": link,
         },
-        "buttons": ([{"title": "1분 영상 보기", "link": vlink}] if video.get("ok") else [])
+        "buttons": ([{"title": "영상 브리핑", "link": vlink}] if video.get("ok") else [])
                    + [{"title": "대시보드 보기", "link": link}],
     }
     return tpl

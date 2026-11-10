@@ -100,7 +100,7 @@ class KakaoTemplateTests(unittest.TestCase):
         rep = {"slug": "weekly-2026-11-02", "page": "weekly.html",
                "last_week": {"mon": "2026-10-26", "fri": "2026-10-30"}, "video": {"ok": True}}
         t = kakao_send.build_template(rep, brief, "https://x.io/b", 3)
-        self.assertEqual([b["title"] for b in t["buttons"]], ["1분 영상 보기", "대시보드 보기"])
+        self.assertEqual([b["title"] for b in t["buttons"]], ["영상 브리핑", "대시보드 보기"])
         self.assertTrue(t["buttons"][0]["link"]["web_url"].endswith("weekly.html#video"))
         self.assertEqual(t["content"]["title"], "주간 마켓 브리핑 | 10월 26일~30일 정리")
         rep["video"] = {"ok": False}

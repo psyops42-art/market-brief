@@ -35,6 +35,8 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 .band .wk{font-size:10.5px;font-weight:900;color:#fff;background:rgba(255,255,255,.22);
   border:1px solid rgba(255,255,255,.5);border-radius:6px;padding:3px 8px;letter-spacing:.3px}
 .band h1{font-size:26px;font-weight:900;color:#fff;letter-spacing:-1.2px;margin-top:3px}
+.band .hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.band .hrow h1{min-width:0}
 .band .date{font-size:14px;color:rgba(255,255,255,.94);margin-top:6px;letter-spacing:-.3px}
 
 /* ── 탭 메뉴 ── */
@@ -175,19 +177,14 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 .srcbox a.ef{color:#6B57C4;background:#F6F3FD;border-color:#CDC1F1}
 .srcbox .memo{font-size:10.5px;color:#98a1a8;margin-top:8px;line-height:1.6}
 
-/* ── 1분 영상 카드 + 재생 오버레이 ── */
-.vcard{display:flex;align-items:center;gap:14px;background:linear-gradient(110deg,#F4F1FD,#EAF7F2);
-  border:1.5px solid #CDC1F1;border-radius:15px;padding:12px 14px;margin-bottom:14px;cursor:pointer}
-.vth{position:relative;flex:none;width:76px;height:135px;border-radius:10px;overflow:hidden;background:#cfd6dd}
-.vth img{width:100%;height:100%;object-fit:cover;display:block}
-.vth .pl{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;
-  background:rgba(124,107,208,.92);box-shadow:0 2px 8px rgba(0,0,0,.25)}
-.vth .pl:after{content:"";position:absolute;left:15px;top:11px;border-style:solid;border-width:9px 0 9px 14px;
+/* ── 상단 '영상 브리핑' 버튼 + 재생 오버레이 ── */
+.vbtn{flex:none;display:inline-flex;align-items:center;gap:7px;margin-top:3px;
+  background:#fff;border:none;border-radius:999px;padding:5px 13px 5px 5px;cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:900;color:#6B57C4;letter-spacing:-.4px;
+  box-shadow:0 2px 8px rgba(40,40,90,.18)}
+.vbtn .pl{position:relative;width:26px;height:26px;border-radius:50%;background:#7C6BD0}
+.vbtn .pl:after{content:"";position:absolute;left:10px;top:7px;border-style:solid;border-width:6px 0 6px 9px;
   border-color:transparent transparent transparent #fff}
-.vtx{flex:1;min-width:0}
-.vtx .vk{font-size:13px;font-weight:900;color:#6B57C4;letter-spacing:-.2px}
-.vtx .vt{font-size:18px;font-weight:900;color:#1d2226;letter-spacing:-.7px;line-height:1.38;margin-top:4px}
-.vtx .vm{font-size:12.5px;color:#8a939a;margin-top:6px}
 .vov{display:none;position:fixed;inset:0;z-index:200;background:rgba(12,16,20,.92);
   align-items:center;justify-content:center;padding:calc(48px + env(safe-area-inset-top)) 12px 16px}
 .vov.on{display:flex}
@@ -210,9 +207,11 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
       <div class="eyebrow">퇴직연금 · 위클리 마켓</div>
       <div class="wk">WEEKLY</div>
     </div>
-    <h1>주간 마켓 브리핑</h1>
+    <div class="hrow"><h1>주간 마켓 브리핑</h1>{{VIDEO_BTN}}</div>
     <div class="date">{{DATE_LINE}}</div>
   </div>
+
+{{VIDEO_CARD}}
 
   <nav class="tabs">
     <button id="t1" class="on" onclick="go(1)"><span class="no">1</span>주간 리뷰</button>
@@ -224,8 +223,6 @@ body{background:#DFE4E1;font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun
 
     <!-- ══════════ PAGE 1 · 주간 리뷰 ══════════ -->
     <section class="pg on" id="p1">
-{{VIDEO_CARD}}
-
       <div class="sec"><div class="ck">✓</div><h2>지난주 한눈에</h2></div>
 
 {{LAST_WEEK_NEWS}}
@@ -392,7 +389,7 @@ document.addEventListener('keydown', function(e){
 });
 
 go(1);
-// 카톡 [1분 영상 보기] 버튼은 #video 로 들어온다 → 플레이어를 바로 띄운다 (재생은 한 번 탭)
+// 카톡 [영상 브리핑] 버튼은 #video 로 들어온다 → 플레이어를 바로 띄운다 (재생은 한 번 탭)
 if(location.hash==='#video' && document.getElementById('vov')){
   var o=document.getElementById('vov'); o.classList.add('on'); document.body.style.overflow='hidden';
 }

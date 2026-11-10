@@ -227,28 +227,27 @@ def build_calendar(brief):
 # ─────────────────────────────── 1분 영상 카드
 
 def build_video_card(slug, video_dir, report=None):
-    """영상이 만들어졌을 때만 1번 탭 맨 위에 '1분 영상 브리핑' 카드를 넣는다.
-    재생은 카드를 누르면 열리는 전체화면 오버레이에서 (카톡 내장 브라우저는 소리 있는 자동재생을 막는다).
+    """영상이 만들어졌을 때만 (상단 밴드의 '영상 브리핑' 버튼, 재생 오버레이) 를 돌려준다.
+    재생은 버튼을 누르면 열리는 전체화면 오버레이에서 (카톡 내장 브라우저는 소리 있는 자동재생을 막는다).
     파일 경로는 상대경로라 weekly.html 과 날짜별 아카이브 페이지 모두에서 같은 파일을 가리킨다.
-    보관기간(8주)이 지나 영상이 지워진 옛 아카이브 페이지에서는 카드가 스스로 숨는다."""
+    보관기간(8주)이 지나 영상이 지워진 옛 아카이브 페이지에서는 버튼이 스스로 숨는다."""
     mp4 = os.path.join(video_dir, f"{slug}.mp4")
     if not os.path.exists(mp4):
-        return ""
+        return "", ""
     sec = (report or {}).get("duration")
-    meta = f"약 {round(sec)}초 · 소리를 켜고 보세요" if sec else "소리를 켜고 보세요"
-    return (
-        f'      <div class="vcard" id="video" role="button" tabindex="0" onclick="openVid()">\n'
-        f'        <div class="vth"><img src="video/{slug}.jpg" alt="" '
-        f'onerror="document.getElementById(\'video\').style.display=\'none\'"><span class="pl"></span></div>\n'
-        '        <div class="vtx"><div class="vk">▶ 1분 영상 브리핑</div>'
-        '<div class="vt">지난주 시장과 이번 주 일정을<br>영상으로 먼저 보세요</div>'
-        f'<div class="vm">{meta}</div></div>\n'
-        '      </div>\n'
+    label = f"영상 브리핑 (약 {round(sec)}초)" if sec else "영상 브리핑"
+    button = (
+        f'<button class="vbtn" id="video" type="button" onclick="openVid()" aria-label="{label}">'
+        '<span class="pl"></span>영상 브리핑'
+        f'<img src="video/{slug}.jpg" alt="" style="display:none" '
+        'onerror="this.parentNode.style.display=\'none\'"></button>')
+    overlay = (
         '      <div class="vov" id="vov" onclick="if(event.target===this)closeVid()">\n'
         '        <button class="vx" onclick="closeVid()" aria-label="닫기">✕</button>\n'
         f'        <video id="vplayer" controls playsinline preload="none" poster="video/{slug}.jpg">'
         f'<source src="video/{slug}.mp4" type="video/mp4"></video>\n'
         '      </div>')
+    return button, overlay
 
 
 # ─────────────────────────────── 메인
@@ -297,7 +296,7 @@ def main():
     if os.path.exists(vr_path):
         with open(vr_path, encoding="utf-8") as fp:
             video_rep = json.load(fp)
-    video_card = build_video_card(slug, video_dir, video_rep)
+    video_btn, video_card = build_video_card(slug, video_dir, video_rep)
     has_video = bool(video_card)
 
     news = build_news(brief)
@@ -350,6 +349,7 @@ def main():
                 .replace("{{OG_URL}}", f"{args.base}/{slug}.html")
                 .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png?v=summary2")
                 .replace("{{DATE_LINE}}", date_line)
+                .replace("{{VIDEO_BTN}}", video_btn)
                 .replace("{{VIDEO_CARD}}", video_card)
                 .replace("{{LAST_WEEK_NEWS}}", news)
                 .replace("{{MVP_CARD}}", mvp)

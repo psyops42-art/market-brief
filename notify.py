@@ -60,7 +60,7 @@ def compose(rep, base, run, label="마켓 브리핑"):
     video = rep.get("video")
     if video is not None:
         if video.get("ok"):
-            lines += ["", "▼ 1분 영상 (대시보드 1번 탭 맨 위에 들어가 있습니다)",
+            lines += ["", "▼ 1분 영상 (대시보드 상단 [영상 브리핑] 버튼)",
                       f"영상 바로 열기 : {link}#video",
                       f"mp4 직접 받기 : {base}/{video.get('file')}"]
             if video.get("tts_error"):
