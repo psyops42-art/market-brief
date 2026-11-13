@@ -190,6 +190,7 @@ body{
   .mind .t{font-size:20px}.mind .b{font-size:16.5px}
   .quote p{font-size:16.5px}.oneline p{font-size:17.5px}
 }
+.news-status{display:inline-block;margin-top:12px;padding:5px 12px;border-radius:16px;background:#fff;color:#254e48;font-size:15px;font-weight:700}
 </style>
 </head>
 <body>
@@ -199,6 +200,7 @@ body{
     <div class="eyebrow">퇴직연금 · 데일리 마켓</div>
     <h1 id="ttl">글로벌 마켓 브리핑</h1>
     <div class="date">{{DATE_LINE}}</div>
+    {{NEWS_STATUS}}
   </div>
 
   <nav class="tabs">
@@ -211,10 +213,11 @@ body{
     <!-- ══════════ PAGE 1 ══════════ -->
     <section class="pg on" id="p1">
 
-      <div class="sec"><div class="ck">✓</div><h2>오늘의 글로벌 헤드라인</h2></div>
+      <div class="sec"><div class="ck">✓</div><h2>{{NEWS_SECTION}}</h2></div>
 
 {{NEWS}}
 
+      <div style="display:{{COMMENTARY_DISPLAY}}">
       <div class="sec" style="margin-top:20px"><div class="ck">✓</div><h2>투자마인드</h2></div>
 
 {{MINDSET}}
@@ -224,6 +227,7 @@ body{
 {{QUOTES}}
       </div>
 
+      </div>
       <div class="note">
         ※ 본 자료는 시장 정보 제공을 목적으로 작성되었으며, 특정 상품의 매매를 권유하지 않습니다.<br>
         ※ 실적배당형 상품의 수익률은 과거 실적으로 미래 수익을 보장하지 않으며, 운용실적에 따라 원금손실이 발생할 수 있습니다.
