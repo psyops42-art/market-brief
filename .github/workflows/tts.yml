@@ -12,10 +12,10 @@ on:
         description: "읽을 텍스트"
         required: true
       engine:
-        description: "chirp (Chirp 3 HD) 또는 gemini (Gemini-TTS)"
+        description: "chirp (Chirp 3 HD) / gemini-api (Gemini TTS, API 키) / gemini (Vertex, 권한 필요)"
         default: chirp
         type: choice
-        options: [chirp, gemini]
+        options: [chirp, gemini-api, gemini]
       voice:
         description: "목소리 (예: Kore, Charon, Aoede, Leda)"
         default: Kore
@@ -48,6 +48,7 @@ jobs:
       - name: Synthesize
         env:
           GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TTS_TEXT: ${{ inputs.text }}
           TTS_ENGINE: ${{ inputs.engine }}
           TTS_VOICE: ${{ inputs.voice }}

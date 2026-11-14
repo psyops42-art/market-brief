@@ -2,7 +2,9 @@
 
 Engines
   chirp  : Chirp 3 HD voices (same as the weekly video), e.g. ko-KR-Chirp3-HD-Kore
-  gemini : Gemini-TTS through the same Cloud TTS endpoint; style is steered by --prompt
+  gemini : Gemini-TTS through Cloud TTS (Vertex AI; needs IAM, an API key alone is refused)
+  gemini-api : Gemini TTS through the Gemini API (AI Studio); works with an API key
+               (GEMINI_API_KEY, else GOOGLE_TTS_API_KEY). Style is steered by --prompt
 
 Long text is split into chunks (Cloud TTS caps a request at ~5,000 bytes) and joined with ffmpeg.
 Usage: python scripts/tts_cli.py --text-file in.txt --out out.mp3 [--engine chirp|gemini] ...
@@ -37,7 +39,45 @@ def chunks(text):
     return parts
 
 
-def synth(text, a, key):
+GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GEMINI_API_MODELS = ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"]
+
+
+def synth_gemini_api(text, a, key, tmp):
+    """Gemini API (AI Studio style): works with a plain API key. Returns MP3 bytes."""
+    spoken = f"{a.prompt}\n\n{text}" if a.prompt else text
+    body = {
+        "contents": [{"parts": [{"text": spoken}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": a.voice}}},
+        },
+    }
+    last = ""
+    for model in GEMINI_API_MODELS:
+        r = requests.post(GEMINI_API.format(model=model), params={"key": key}, json=body, timeout=180)
+        if r.status_code == 404:
+            last = f"{model}: 404"
+            continue
+        if r.status_code != 200:
+            raise RuntimeError(f"Gemini API HTTP {r.status_code}: {r.text[:400]}")
+        part = r.json()["candidates"][0]["content"]["parts"][0]["inlineData"]
+        pcm = os.path.join(tmp, f"g{abs(hash(text))}.pcm")
+        mp3 = pcm[:-4] + ".mp3"
+        with open(pcm, "wb") as fh:
+            fh.write(base64.b64decode(part["data"]))
+        rate = re.search(r"rate=(\d+)", part.get("mimeType", "")) or None
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "s16le", "-ar",
+                        rate.group(1) if rate else "24000", "-ac", "1", "-i", pcm,
+                        "-filter:a", f"atempo={a.rate}", "-b:a", "128k", mp3], check=True)
+        print(f"  gemini-api model={model}")
+        return open(mp3, "rb").read()
+    raise RuntimeError(f"no Gemini TTS model available ({last})")
+
+
+def synth(text, a, key, tmp=None):
+    if a.engine == "gemini-api":
+        return synth_gemini_api(text, a, os.environ.get("GEMINI_API_KEY") or key, tmp)
     if a.engine == "gemini":
         body = {
             "input": {"text": text, **({"prompt": a.prompt} if a.prompt else {})},
@@ -62,7 +102,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--text-file", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--engine", choices=["chirp", "gemini"], default="chirp")
+    p.add_argument("--engine", choices=["chirp", "gemini", "gemini-api"], default="chirp")
     p.add_argument("--voice", default="Kore")
     p.add_argument("--lang", default="ko-KR")
     p.add_argument("--rate", type=float, default=1.0)
@@ -82,7 +122,7 @@ def main():
         for i, part in enumerate(parts):
             f = os.path.join(tmp, f"{i:03d}.mp3")
             with open(f, "wb") as fh:
-                fh.write(synth(part, a, key))
+                fh.write(synth(part, a, key, tmp))
             files.append(f)
         if len(files) == 1:
             os.replace(files[0], a.out)
