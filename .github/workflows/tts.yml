@@ -1,0 +1,67 @@
+name: tts (on-demand voice)
+
+# Run from GitHub (Actions → tts → Run workflow) or from Claude via `gh workflow run tts.yml`.
+# Uses the existing GOOGLE_TTS_API_KEY secret. The key never leaves GitHub.
+# Note: this repository is public, so run inputs (the text) are visible to anyone.
+# Do not send confidential scripts through this workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      text:
+        description: "읽을 텍스트"
+        required: true
+      engine:
+        description: "chirp (Chirp 3 HD) 또는 gemini (Gemini-TTS)"
+        default: chirp
+        type: choice
+        options: [chirp, gemini]
+      voice:
+        description: "목소리 (예: Kore, Charon, Aoede, Leda)"
+        default: Kore
+      rate:
+        description: "말 속도 (0.8~1.3)"
+        default: "1.0"
+      prompt:
+        description: "gemini 전용: 말투 지시 (예: 차분하고 신뢰감 있게)"
+        default: ""
+      name:
+        description: "출력 파일 이름"
+        default: voice
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tts-${{ github.run_id }}
+
+jobs:
+  synth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Synthesize
+        env:
+          GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
+          TTS_TEXT: ${{ inputs.text }}
+          TTS_ENGINE: ${{ inputs.engine }}
+          TTS_VOICE: ${{ inputs.voice }}
+          TTS_RATE: ${{ inputs.rate }}
+          TTS_PROMPT: ${{ inputs.prompt }}
+          TTS_NAME: ${{ inputs.name }}
+        run: |
+          printf '%s' "$TTS_TEXT" > input.txt
+          name="$(printf '%s' "$TTS_NAME" | tr -cd 'A-Za-z0-9_-')"
+          echo "OUT_NAME=${name:-voice}" >> "$GITHUB_ENV"
+          python scripts/tts_cli.py --text-file input.txt --out "${name:-voice}.mp3" \
+            --engine "$TTS_ENGINE" --voice "$TTS_VOICE" --rate "$TTS_RATE" --prompt "$TTS_PROMPT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tts-${{ env.OUT_NAME }}
+          path: ${{ env.OUT_NAME }}.mp3
+          retention-days: 1
