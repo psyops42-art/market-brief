@@ -30,10 +30,10 @@ on:
         default: voice
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: tts-${{ github.run_id }}
+  group: tts-output
 
 jobs:
   synth:
@@ -65,3 +65,13 @@ jobs:
           name: tts-${{ env.OUT_NAME }}
           path: ${{ env.OUT_NAME }}.mp3
           retention-days: 1
+      # Also publish to a throwaway branch so Claude can fetch it over git
+      # (its workspace cannot reach the artifact storage host). Force-pushed: keeps only the latest file.
+      - name: Publish to tts-output branch
+        run: |
+          mkdir pub && cp "$OUT_NAME.mp3" pub/ && cd pub
+          git init -q -b tts-output
+          git add .
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -q -m "tts: $OUT_NAME (run ${{ github.run_id }})"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" tts-output
