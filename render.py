@@ -12,6 +12,8 @@
 디자인을 바꾸고 싶으면 이 파일이 아니라 template.html 을 고치세요.
 """
 
+from news_status import LABELS, NO_NEWS, news_status, preview_description
+
 import argparse
 import datetime as dt
 import html
@@ -123,20 +125,34 @@ def safe_html(text) -> str:
     # 여는 태그와 닫는 태그가 짝을 이루는 경우에만 복원한다
     return re.sub(r"&lt;b&gt;(.*?)&lt;/b&gt;", r"<b>\1</b>", escaped, flags=re.S)
 
+def recovery_attempted(slug):
+    if os.getenv("NEWS_RECOVERY", "").lower() == "true":
+        return True
+    try:
+        with open("docs/report.json", encoding="utf-8") as fp:
+            previous = json.load(fp)
+        return previous.get("slug") == slug and bool(previous.get("news_recovery_attempted"))
+    except (OSError, ValueError):
+        return False
+
+
 def build_news(brief):
+    if news_status(brief) == "failed":
+        return f'<div class="news"><div class="d">{NO_NEWS}</div><button onclick="go(2)">시장지표 보기</button></div>'
     out = []
     for i, n in enumerate((brief.get("headlines") or [])[:3], 1):
         out.append('      <div class="news">\n'
                    f'        <div class="h"><em>{"①②③"[i-1]}</em>{html.escape(str(n.get("title", "")))}</div>\n'
-                   f'        <div class="d">{safe_html(n.get("body"))}</div>\n'
+                   f'        <div class="d">{safe_html(n.get("body")) if not n.get("title_only") else "원문 제목 · 요약 생략"}</div>\n'
                    f'        <div class="s">{html.escape(str(n.get("source", "")))}</div>\n'
                    '      </div>')
     c = brief.get("checkpoint") or {}
-    out.append('      <div class="news kr">\n'
-               f'        <div class="h">{html.escape(str(c.get("title", "")))}</div>\n'
-               f'        <div class="d">{safe_html(c.get("body"))}</div>\n'
-               f'        <div class="s">{html.escape(str(c.get("source", "")))}</div>\n'
-               '      </div>')
+    if c and c.get("status") != "unavailable":
+        out.append('      <div class="news kr">\n'
+                   f'        <div class="h">{html.escape(str(c.get("title", "")))}</div>\n'
+                   f'        <div class="d">{safe_html(c.get("body"))}</div>\n'
+                   f'        <div class="s">{html.escape(str(c.get("source", "")))}</div>\n'
+                   '      </div>')
     return "\n".join(out)
 
 
@@ -256,7 +272,10 @@ def main():
         tpl = fp.read()
     out_html = (tpl
                 .replace("{{TITLE}}", html.escape(title))
-                .replace("{{OG_DESC}}", html.escape(str(brief.get("og_description", ""))))
+                .replace("{{OG_DESC}}", html.escape(str(preview_description(brief))))
+                .replace("{{NEWS_STATUS}}", f'<div class="news-status" role="status">뉴스 {LABELS[news_status(brief)]}</div>')
+                .replace("{{NEWS_SECTION}}", "시장지표 안내" if news_status(brief) == "failed" else "오늘의 글로벌 헤드라인")
+                .replace("{{COMMENTARY_DISPLAY}}", "none" if news_status(brief) == "failed" else "block")
                 .replace("{{OG_URL}}", f"{args.base}/{slug}.html")
                 .replace("{{OG_IMAGE}}", f"{args.base}/og-{slug}.png?v=summary2")
                 .replace("{{DATE_LINE}}", date_line)
@@ -289,6 +308,8 @@ def main():
 
     report = {"slug": slug, "page": "daily.html", "unresolved": UNRESOLVED,
               "cutoff": cutoff,
+              "news_status": news_status(brief),
+              "news_recovery_attempted": recovery_attempted(slug),
               "stale": [f'{x["label"]}({fmt_date(x["asof"])})' for x in STALE.values()],
               "delayed": [f'{x["label"]}({fmt_date(x["asof"])})' for x in DELAYED.values()],
               "collected": sorted(S.keys()), "brief_issues": brief.get("_issues", [])}

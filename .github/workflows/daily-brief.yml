@@ -5,10 +5,17 @@ on:
     # 한국 표준시간 월~금 오전 07:20 (KST, UTC+9)
     - cron: "20 7 * * 1-5"
       timezone: "Asia/Seoul"
+    - cron: "0 8 * * 1-5"
+      timezone: "Asia/Seoul"
   workflow_dispatch:
     inputs:
       automatic:
         description: "예약 호출: 당일 배포 완료 시 중복 실행 생략"
+        type: boolean
+        default: false
+
+      recovery:
+        description: "08:00 뉴스 복구: 당일 비정상 뉴스만 1회 재생성"
         type: boolean
         default: false
 
@@ -22,6 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  NEWS_RECOVERY: ${{ github.event.schedule == '0 8 * * 1-5' || inputs.recovery == true }}
   PAGES_BASE: https://psyops42-art.github.io/market-brief
 
 jobs:
@@ -43,12 +51,24 @@ jobs:
           AUTOMATIC: ${{ inputs.automatic }}
         run: python schedule_guard.py --kind daily
 
+      - name: 뉴스 복구 1회 시도 기록 (실패해도 중복 실행 방지)
+        if: steps.guard.outputs.run == 'true' && env.NEWS_RECOVERY == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .state/news-recovery.json
+          git commit -m "Record daily news recovery attempt"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
   build:
     needs: preflight
     if: needs.preflight.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: 전체 작업 시간 예산 시작
+        run: echo "PIPELINE_DEADLINE_EPOCH=$(( $(date +%s) + 885 ))" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
@@ -149,9 +169,9 @@ jobs:
           unresolved = rep.get("unresolved", ["렌더 리포트 없음 — 실행이 중단되었습니다"])
           issues = rep.get("brief_issues", [])
           ok = status == "success"
-          icon = "✅" if ok and not unresolved and not rep.get("stale") else ("⚠️" if ok else "❌")
+          icon = "✅" if ok and not unresolved and not rep.get("stale") and rep.get("news_status", "normal") == "normal" else ("⚠️" if ok else "❌")
           note = "" if ok else " — 실행 실패, 아래 링크는 아직 생성되지 않았습니다"
-          if ok and (unresolved or rep.get("stale")):
+          if ok and (unresolved or rep.get("stale") or rep.get("news_status", "normal") != "normal"):
               note = " — 배포됐지만 확인이 필요한 항목이 있습니다"
           print(f"## {icon} 데일리 마켓 브리핑 {slug}{note}\n")
           print("| 항목 | 링크 |")
@@ -185,4 +205,13 @@ jobs:
             brief.json
             out/
             docs/report.json
+          retention-days: 7
+
+      - name: 뉴스 API 진단 보관 (공개 사이트 제외)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: debug/news/
+          if-no-files-found: ignore
           retention-days: 7

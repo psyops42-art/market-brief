@@ -4,12 +4,16 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit
+from news_selection import market_score
 import html
 import re
 import requests
 
 FEEDS = (
-    ("CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
+    # Publisher XML channel titles verified: Finance, Economy, MarketWatch Breaking News.
+    ("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"),
+    ("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258"),
+    ("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_bulletins"),
     ("BBC", "https://feeds.bbci.co.uk/news/business/rss.xml"),
     ("연합뉴스", "https://www.yna.co.kr/rss/economy.xml"),
 )
@@ -43,9 +47,9 @@ def fetch_news_sources(start, end):
         except Exception as exc:
             print(f"  ! {name} 최신 기사 목록 조회 실패: {type(exc).__name__}")
             return []
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=len(FEEDS)) as pool:
         groups = list(pool.map(fetch, FEEDS))
     # Bound prompt size while keeping each publisher represented.
     candidates = [item for group in groups for item in sorted(
-        group, key=lambda x: datetime.fromisoformat(x["published_at"]), reverse=True)[:20]]
+        group, key=lambda x: (market_score(x), datetime.fromisoformat(x["published_at"])), reverse=True)[:30]]
     return {item["url"]: item for item in candidates}

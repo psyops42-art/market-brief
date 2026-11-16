@@ -20,6 +20,8 @@
     python notify.py ... --dry-run      # 보내지 않고 내용만 출력
 """
 
+from news_status import LABELS, NO_NEWS
+
 import argparse
 import json
 import os
@@ -45,9 +47,13 @@ def compose(rep, base, run, label="마켓 브리핑"):
     delayed = rep.get("delayed", [])
     link = f"{base}/{rep.get('page') or slug + '.html'}"
 
-    needs_check = bool(unresolved or issues or stale)
+    news = rep.get("news_status")
+    needs_check = bool(unresolved or issues or stale or (news and news != "normal"))
     status = "확인 필요" if needs_check else "정상"
     subject = f"[{label}] {slug} 아침" + ("  ※확인필요" if needs_check else "")
+
+    if news in LABELS:
+        subject += f" [뉴스 {LABELS[news]}]"
 
     lines = [
         f"브리핑이 준비됐습니다.  ({status})",
@@ -57,6 +63,10 @@ def compose(rep, base, run, label="마켓 브리핑"):
         "",
         f"아카이브 : {base}/",
     ]
+    if news in LABELS:
+        lines += ["", f"뉴스 상태: {LABELS[news]}"]
+        if news == "failed":
+            lines += [NO_NEWS]
     video = rep.get("video")
     if video is not None:
         if video.get("ok"):
