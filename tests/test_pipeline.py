@@ -29,6 +29,47 @@ from pipeline_utils import md_date_in_range, safe_rich_text
 
 
 class SafetyTests(unittest.TestCase):
+    def test_generated_titles_render_bold_safely_in_both_editions(self):
+        root = Path(__file__).resolve().parents[1]
+        title = ('<b>엔비디아 실적 깜짝 선방</b>…주가 반등 & 전망 '
+                 '<img src=x onerror=alert(1)><b onclick="x">금지</b>')
+        card = {"title": title, "body": "본문", "source": "A & B <b>매체</b>"}
+        cases = (
+            (render, {"briefing_date": "2026-11-18", "series": {}},
+             {"headlines": [card], "checkpoint": card, "mindset": [card]},
+             "template.html", "daily.html", 3),
+            (render_weekly,
+             {"series": {}, "last_week": {"mon": "2026-11-09", "fri": "2026-11-13"},
+              "this_week": {"mon": "2026-11-16", "fri": "2026-11-20"}},
+             {"last_week_headlines": [card], "retrospective": card, "mindset_01": card,
+              "education": card, "rebalance_note": card},
+             "template_weekly.html", "weekly.html", 5),
+        )
+        for renderer, data, brief, template, page, count in cases:
+            with self.subTest(page=page), tempfile.TemporaryDirectory() as temp:
+                folder = Path(temp)
+                (folder / "data.json").write_text(json.dumps(data), encoding="utf-8")
+                (folder / "brief.json").write_text(json.dumps(brief), encoding="utf-8")
+                argv = ["render", "--data", str(folder / "data.json"),
+                        "--brief", str(folder / "brief.json"), "--template", str(root / template),
+                        "--base", "https://example.test", "--out", str(folder / "out")]
+                weekly_og = types.ModuleType("make_og_weekly")
+                weekly_og.build = mock.Mock()
+                with mock.patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()), \
+                        mock.patch.dict(sys.modules, {"make_og_weekly": weekly_og}), \
+                        mock.patch.object(render.make_og, "build", create=True):
+                    renderer.main()
+                for output_page in (page, "2026-11-18.html" if page == "daily.html"
+                                    else "weekly-2026-11-16.html"):
+                    output = (folder / "out" / output_page).read_text(encoding="utf-8")
+                    self.assertEqual(output.count("<b>엔비디아 실적 깜짝 선방</b>"), count)
+                    self.assertNotIn("&lt;b&gt;엔비디아", output)
+                    self.assertNotIn("<img src=x", output)
+                    self.assertNotIn('<b onclick="x">', output)
+                    self.assertEqual(output.count("&lt;img src=x onerror=alert(1)&gt;"), count)
+                    self.assertEqual(output.count("&amp; 전망"), count)
+                    self.assertIn("A &amp; B &lt;b&gt;매체&lt;/b&gt;", output)
+
     def test_only_plain_b_tags_survive(self):
         value = '<b>강조</b><script>alert(1)</script><b onclick="x">위험</b>'
         actual = safe_rich_text(value)

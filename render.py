@@ -113,7 +113,7 @@ def fmt_date(iso):
 def safe_html(text) -> str:
     """LLM이 생성한 문장을 HTML에 넣을 때 쓰는 안전 변환.
 
-    본문에는 <b> 강조만 허용한다. 전체를 이스케이프한 뒤 순수한 <b>...</b>
+    제목과 본문에는 <b> 강조만 허용한다. 전체를 이스케이프한 뒤 순수한 <b>...</b>
     '쌍'만 되살리므로 아래가 모두 보장된다.
       · <script>, <img onerror=...> 등은 문자로 표시되어 실행되지 않는다
       · 속성이 붙은 <b foo=..> 도 허용하지 않는다
@@ -127,13 +127,13 @@ def build_news(brief):
     out = []
     for i, n in enumerate((brief.get("headlines") or [])[:3], 1):
         out.append('      <div class="news">\n'
-                   f'        <div class="h"><em>{"①②③"[i-1]}</em>{html.escape(str(n.get("title", "")))}</div>\n'
+                   f'        <div class="h"><em>{"①②③"[i-1]}</em>{safe_html(n.get("title"))}</div>\n'
                    f'        <div class="d">{safe_html(n.get("body"))}</div>\n'
                    f'        <div class="s">{html.escape(str(n.get("source", "")))}</div>\n'
                    '      </div>')
     c = brief.get("checkpoint") or {}
     out.append('      <div class="news kr">\n'
-               f'        <div class="h">{html.escape(str(c.get("title", "")))}</div>\n'
+               f'        <div class="h">{safe_html(c.get("title"))}</div>\n'
                f'        <div class="d">{safe_html(c.get("body"))}</div>\n'
                f'        <div class="s">{html.escape(str(c.get("source", "")))}</div>\n'
                '      </div>')
@@ -154,7 +154,7 @@ def build_mindset(brief):
                      '        </div>')
         out.append('      <div class="mind">\n'
                    f'        <div class="n">MINDSET 0{i}</div>\n'
-                   f'        <div class="t">{html.escape(str(m.get("title", "")))}</div>\n'
+                   f'        <div class="t">{safe_html(m.get("title"))}</div>\n'
                    f'        <div class="b">{safe_html(m.get("body"))}</div>{badge}\n'
                    '      </div>')
     return "\n".join(out)
