@@ -48,7 +48,7 @@ def fmt_date(iso):
 def safe_html(text) -> str:
     """LLM이 생성한 문장을 HTML에 넣을 때 쓰는 안전 변환.
 
-    본문에는 <b> 강조만 허용한다. 전체를 이스케이프한 뒤 순수한 <b>...</b>
+    제목과 본문에는 <b> 강조만 허용한다. 전체를 이스케이프한 뒤 순수한 <b>...</b>
     '쌍'만 되살리므로 아래가 모두 보장된다.
       · <script>, <img onerror=...> 등은 문자로 표시되어 실행되지 않는다
       · 속성이 붙은 <b foo=..> 도 허용하지 않는다
@@ -164,7 +164,7 @@ def build_news(brief):
     out = []
     for i, n in enumerate(brief.get("last_week_headlines", [])[:3], 1):
         out.append('      <div class="news">\n'
-                   f'        <div class="h"><em>{icons[i-1]}</em>{html.escape(n.get("title",""))}</div>\n'
+                   f'        <div class="h"><em>{icons[i-1]}</em>{safe_html(n.get("title"))}</div>\n'
                    f'        <div class="d">{safe_html(n.get("body"))}</div>\n'
                    f'        <div class="s">{html.escape(n.get("source",""))}</div>\n'
                    '      </div>')
@@ -305,12 +305,12 @@ def main():
 
     retro = brief.get("retrospective", {"title": "확인필요", "body": "회고 데이터가 생성되지 않았습니다."})
     retro_card = ('      <div class="mind">\n        <div class="n">RETROSPECTIVE</div>\n'
-                 f'        <div class="t">{html.escape(retro.get("title",""))}</div>\n'
+                 f'        <div class="t">{safe_html(retro.get("title"))}</div>\n'
                  f'        <div class="b">{safe_html(retro.get("body"))}</div>\n      </div>')
 
     m01 = brief.get("mindset_01", {"title": "확인필요", "body": "생성되지 않았습니다."})
     mindset01 = ('      <div class="mind">\n        <div class="n">MINDSET 01</div>\n'
-                f'        <div class="t">{html.escape(m01.get("title",""))}</div>\n'
+                f'        <div class="t">{safe_html(m01.get("title"))}</div>\n'
                 f'        <div class="b">{safe_html(m01.get("body"))}</div>\n      </div>')
 
     edu = brief.get("education", {"title": "", "body": ""})
@@ -356,9 +356,9 @@ def main():
                 .replace("{{RETRO_CARD}}", retro_card)
                 .replace("{{CALENDAR}}", calendar)
                 .replace("{{MINDSET_01}}", mindset01)
-                .replace("{{REBAL_TITLE}}", html.escape(rebal.get("title", "")))
+                .replace("{{REBAL_TITLE}}", safe_html(rebal.get("title")))
                 .replace("{{REBAL_BODY}}", safe_html(rebal.get("body")))
-                .replace("{{EDU_TITLE}}", html.escape(edu.get("title", "")))
+                .replace("{{EDU_TITLE}}", safe_html(edu.get("title")))
                 .replace("{{EDU_BODY}}", safe_html(edu.get("body")))
                 .replace("{{QUOTES}}", quotes_html)
                 .replace("{{ASOF_EQUITY}}", asof_equity)
