@@ -1,25 +1,27 @@
 {
-  "slug": "weekly-2026-11-16",
+  "slug": "weekly-2026-11-23",
   "page": "weekly.html",
   "last_week": {
-    "mon": "2026-11-09",
-    "fri": "2026-11-13"
-  },
-  "this_week": {
     "mon": "2026-11-16",
     "fri": "2026-11-20"
+  },
+  "this_week": {
+    "mon": "2026-11-23",
+    "fri": "2026-11-27"
   },
   "unresolved": [],
   "stale": [],
   "delayed": [],
-  "brief_issues": [],
+  "brief_issues": [
+    "헤드라인 3 날짜(11/22)가 지난주 범위(2026-11-16~2026-11-20) 밖"
+  ],
   "og_ok": true,
   "og_error": "",
   "video": {
     "ok": true,
-    "file": "video/weekly-2026-11-16.mp4",
-    "poster": "video/weekly-2026-11-16.jpg",
-    "duration": 67.2,
+    "file": "video/weekly-2026-11-23.mp4",
+    "poster": "video/weekly-2026-11-23.jpg",
+    "duration": 72.3,
     "voice": "ko-KR-Chirp3-HD-Kore",
     "tts_error": "",
     "error": ""
