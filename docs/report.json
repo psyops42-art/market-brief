@@ -1,8 +1,8 @@
 {
-  "slug": "2026-11-23",
+  "slug": "2026-11-24",
   "page": "daily.html",
   "unresolved": [],
-  "cutoff": "2026-11-20",
+  "cutoff": "2026-11-23",
   "stale": [],
   "delayed": [],
   "collected": [
@@ -27,5 +27,7 @@
     "vix",
     "wti"
   ],
-  "brief_issues": []
+  "brief_issues": [
+    "헤드라인 1: 기사 보충 처리 — 헤드라인 1: 웹검색 결과에 없는 원문 URL"
+  ]
 }
