@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 import html
 import re
 import requests
+from news_priority import rank_key
 
 FEEDS = (
     ("CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
@@ -33,7 +34,7 @@ def parse_feed(xml, name, start, end):
     return items
 
 
-def fetch_news_sources(start, end):
+def fetch_news_sources(start, end, requirements=None):
     def fetch(feed):
         name, url = feed
         try:
@@ -47,5 +48,5 @@ def fetch_news_sources(start, end):
         groups = list(pool.map(fetch, FEEDS))
     # Bound prompt size while keeping each publisher represented.
     candidates = [item for group in groups for item in sorted(
-        group, key=lambda x: datetime.fromisoformat(x["published_at"]), reverse=True)[:20]]
+        group, key=lambda x: (*rank_key(x, requirements), datetime.fromisoformat(x["published_at"])), reverse=True)[:20]]
     return {item["url"]: item for item in candidates}

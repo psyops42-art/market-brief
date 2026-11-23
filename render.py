@@ -125,6 +125,13 @@ def safe_html(text) -> str:
 
 def build_news(brief):
     out = []
+    if brief.get("_news_status") == "partial":
+        missing_driver = any("주요 시장 뉴스:" in x for x in brief.get("_issues", []) + brief.get("_news_issues", []))
+        message = ("미국 증시의 큰 변동과 관련된 핵심 뉴스는 추가 확인이 필요합니다."
+                   if missing_driver else "일부 뉴스는 생성·검증 과정의 문제로 확인된 보충 기사로 제공합니다.")
+        out.append('      <div class="news kr" role="status">'
+                   '<div class="h">뉴스 확인 안내</div>'
+                   f'<div class="d">{message}</div></div>')
     for i, n in enumerate((brief.get("headlines") or [])[:3], 1):
         out.append('      <div class="news">\n'
                    f'        <div class="h"><em>{"①②③"[i-1]}</em>{safe_html(n.get("title"))}</div>\n'
@@ -288,6 +295,7 @@ def main():
     print(f"  · OG 썸네일 → {png}")
 
     report = {"slug": slug, "page": "daily.html", "unresolved": UNRESOLVED,
+              "news_status": brief.get("_news_status", "normal"),
               "cutoff": cutoff,
               "stale": [f'{x["label"]}({fmt_date(x["asof"])})' for x in STALE.values()],
               "delayed": [f'{x["label"]}({fmt_date(x["asof"])})' for x in DELAYED.values()],

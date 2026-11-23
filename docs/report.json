@@ -29,5 +29,14 @@
   ],
   "brief_issues": [
     "헤드라인 1: 기사 보충 처리 — 헤드라인 1: 웹검색 결과에 없는 원문 URL"
-  ]
+  ],
+  "news_status": "partial",
+  "editorial_correction": {
+    "date": "2026-11-24",
+    "note": "누락된 미국 증시 핵심 뉴스를 확인 후 첫 헤드라인에 보완. 다른 뉴스와 시장 수치는 유지.",
+    "sources": [
+      "https://www.yna.co.kr/view/AKR20261124009400072",
+      "https://www.bbc.co.uk/news/articles/cq62pn6j42jko"
+    ]
+  }
 }
