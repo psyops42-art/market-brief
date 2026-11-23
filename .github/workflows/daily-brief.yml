@@ -149,9 +149,9 @@ jobs:
           unresolved = rep.get("unresolved", ["렌더 리포트 없음 — 실행이 중단되었습니다"])
           issues = rep.get("brief_issues", [])
           ok = status == "success"
-          icon = "✅" if ok and not unresolved and not rep.get("stale") else ("⚠️" if ok else "❌")
+          icon = "✅" if ok and not unresolved and not rep.get("stale") and not issues else ("⚠️" if ok else "❌")
           note = "" if ok else " — 실행 실패, 아래 링크는 아직 생성되지 않았습니다"
-          if ok and (unresolved or rep.get("stale")):
+          if ok and (unresolved or rep.get("stale") or issues):
               note = " — 배포됐지만 확인이 필요한 항목이 있습니다"
           print(f"## {icon} 데일리 마켓 브리핑 {slug}{note}\n")
           print("| 항목 | 링크 |")
@@ -175,8 +175,8 @@ jobs:
           print(f"\n<sub>수집 성공 {len(rep.get('collected', []))}종</sub>")
           PY
 
-      - name: 실패 시 아티팩트 보관
-        if: failure()
+      - name: 뉴스 진단 자료 보관
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: debug-${{ github.run_id }}
@@ -185,4 +185,5 @@ jobs:
             brief.json
             out/
             docs/report.json
+            debug/news/
           retention-days: 7
