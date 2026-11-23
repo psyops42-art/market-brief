@@ -132,11 +132,12 @@ class ResponseRecoveryTests(unittest.TestCase):
         result, sent = self.call([{'stop_reason': 'max_tokens', 'content': [{'type': 'text', 'text': 'partial'}]},
                                  {'stop_reason': 'end_turn', 'content': [{'type': 'text', 'text': 'complete'}]}])
         self.assertEqual(result, 'complete')
-        self.assertEqual([x['max_tokens'] for x in sent], [6000, 12000])
+        self.assertEqual([x['max_tokens'] for x in sent],
+                         [mb.DEFAULT_MAX_TOKENS, mb.MAX_TOKENS_CEILING])
         self.assertEqual(sent[0]['messages'], sent[1]['messages'])
 
     def test_repeated_pauses_and_truncation_are_bounded(self):
-        for stop, count in [('pause_turn', 3), ('max_tokens', 2)]:
+        for stop, count in [('pause_turn', mb.PAUSE_TURN_LIMIT + 1), ('max_tokens', 2)]:
             with self.subTest(stop=stop), self.assertRaises(mb.GenerationError):
                 self.call([{'stop_reason': stop, 'content': []}] * count)
 
