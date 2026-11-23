@@ -124,13 +124,25 @@ def record_response(payload):
         json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
+# 응답 완성에 넉넉한 기본 토큰(웹검색 결과 포함). 평상시 이 값을 넘지 않아
+# max_tokens 절단 분기 자체가 거의 발생하지 않도록 둔다. 그래도 잘리면
+# MAX_TOKENS_CEILING까지 1회 확장한다.
+DEFAULT_MAX_TOKENS = 8000
+MAX_TOKENS_CEILING = 16000
+# 웹검색 횟수가 많을수록 pause_turn 빈도가 올라가므로 5회로 제한한다.
+WEB_SEARCH_MAX_USES = 5
+# pause_turn 재개 상한. 180초 예산이 전체를 다시 한 번 감싼다.
+PAUSE_TURN_LIMIT = 3
+
+
 def call_api(prompt: str, key: str, source_urls: set | None = None, *, search=True) -> str:
     body = {
-        "model": MODEL, "max_tokens": 6000, "system": SYSTEM,
+        "model": MODEL, "max_tokens": DEFAULT_MAX_TOKENS, "system": SYSTEM,
         "messages": [{"role": "user", "content": prompt}],
     }
     if search:
-        body["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}]
+        body["tools"] = [{"type": "web_search_20250305", "name": "web_search",
+                          "max_uses": WEB_SEARCH_MAX_USES}]
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01",
                "content-type": "application/json"}
     pauses, transient_errors = 0, 0
@@ -164,15 +176,16 @@ def call_api(prompt: str, key: str, source_urls: set | None = None, *, search=Tr
             source_urls.update(search_result_urls(blocks))
         stop = payload.get("stop_reason")
         if stop == "pause_turn":
-            if pauses >= 2:
-                raise GenerationError("pause_turn continuation limit (2)")
+            if pauses >= PAUSE_TURN_LIMIT:
+                raise GenerationError(f"pause_turn continuation limit ({PAUSE_TURN_LIMIT})")
             pauses += 1
             body["messages"].append({"role": "assistant", "content": blocks})
             continue
         if stop == "max_tokens":
-            if body["max_tokens"] >= 12000:
-                raise GenerationError("max_tokens at 12000; truncated response rejected")
-            body["max_tokens"] = 12000
+            if body["max_tokens"] >= MAX_TOKENS_CEILING:
+                raise GenerationError(
+                    f"max_tokens at {MAX_TOKENS_CEILING}; truncated response rejected")
+            body["max_tokens"] = MAX_TOKENS_CEILING
             # Replay the pre-response request. Never accept or append truncated JSON.
             continue
         if stop != "end_turn":
